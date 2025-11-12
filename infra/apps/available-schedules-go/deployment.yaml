@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: available-schedules-go
+  labels: { app: available-schedules-go }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: available-schedules-go }
+  template:
+    metadata:
+      labels: { app: available-schedules-go }
+    spec:
+      containers:
+        - name: available-schedules-go
+          image: available-schedules-go:local
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: ERROR_RATE
+              value: "0.02"
+            - name: EXTRA_LATENCY_MS
+              value: "40"
+            - name: SERVICE_NAME
+              value: "available-schedules"
+          ports:
+            - containerPort: 8080
+          resources:
+            requests: { cpu: "40m", memory: "48Mi" }
+            limits:   { cpu: "200m", memory: "192Mi" }
+

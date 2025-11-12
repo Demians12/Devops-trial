@@ -12,7 +12,7 @@ export const options = {
 const host = __ENV.HOST || 'http://dev.local';
 
 export default function () {
-  http.get(`${host}/api/v1/orders`);
-  http.get(`${host}/api/v2/orders`);
+  http.get(`${host}/appoints/available-schedule?professional_id=4102&unit_id=108`);
+  http.get(`${host}/go/appoints/available-schedule?professional_id=512&unit_id=42`);
   sleep(0.2);
 }

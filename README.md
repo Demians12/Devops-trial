@@ -1,6 +1,6 @@
 # DevOps Senior — Trial Task
 
-Este é um desafio para a posição de DevOps Senior. As seções abaixo guiarão você pela configuração e pelos objetivos do projeto.
+Este repositório contém a infraestrutura base do desafio de DevOps Senior. O ambiente traz duas APIs de exemplo (Python e Go) que expõem dados fictícios de agendas médicas, inspirados no endpoint `GET /appoints/available-schedule` da Feegow. Sua missão é evoluir automação, observabilidade e confiabilidade a partir desse ponto de partida.
 
 ## Requisitos
 
@@ -21,7 +21,7 @@ Antes de começar, certifique-se de que você tem as seguintes ferramentas insta
     127.0.0.1 dev.local
     ```
 
-2. **Subir o Ambiente**: Crie o cluster Kubernetes local, o ingress controller e a stack de observabilidade.
+2. **Subir a Infraestrutura Base**: Crie o cluster Kubernetes local, o ingress controller e a stack de observabilidade.
 
     > Certifique-se de que o Docker (ou Colima) está em execução e acessível pelo usuário atual antes de rodar este passo. O alvo executa um _preflight_ que checa binários obrigatórios, permissões do Docker e a entrada `dev.local` no `/etc/hosts`.
 
@@ -29,20 +29,21 @@ Antes de começar, certifique-se de que você tem as seguintes ferramentas insta
     make up
     ```
 
-3. **Deploy da Aplicação**: Faça o build, carregue a imagem no cluster e realize o deploy da `orders-api`, incluindo o HPA e o ServiceMonitor.
+3. **Publicar as Aplicações de Exemplo**: Faça o build, carregue as imagens no cluster e realize o deploy das APIs de agendas (`available-schedules`) em Python e Go, incluindo HPA e ServiceMonitor.
 
     ```sh
     make deploy
     ```
 
-4. **Verificar a Aplicação**: Acesse o endpoint de health check para confirmar que a aplicação está no ar.
-    - `http://dev.local/healthz`
-    - A página principal (`http://dev.local/`) retorna um JSON com o status do ambiente e os endpoints principais.
+4. **Verificar as Aplicações**: Acesse os endpoints de health check e de agenda disponível para validar que tudo está ativo.
+    - Python: `http://dev.local/healthz` e `http://dev.local/appoints/available-schedule`
+    - Go: `http://dev.local/go/healthz` e `http://dev.local/go/appoints/available-schedule`
+    - As rotas principais também informam caminhos úteis: `http://dev.local/` e `http://dev.local/go`
 5. **Acessar o Grafana**: Explore os dashboards de monitoramento.
     - **URL**: `http://dev.local/grafana/`
     - **Credenciais**: admin/admin
     - _Nota: Os datasources para Prometheus, Loki e Tempo já estão pré-configurados._
-6. **Gerar Carga (Opcional)**: Use o `k6` para gerar carga na aplicação e observar seu comportamento.
+6. **Gerar Carga (Opcional)**: Use o `k6` para gerar carga simultânea em ambas as APIs e observar o comportamento da infraestrutura.
 
     ```sh
     make load
@@ -58,20 +59,21 @@ Antes de começar, certifique-se de que você tem as seguintes ferramentas insta
 
 ## Intencionalmente "ruim"
 
-Para este desafio, alguns componentes foram configurados de forma subótima intencionalmente. Seu objetivo é melhorá-los.
+Alguns componentes permanecem deliberadamente simples para você evoluir durante o desafio:
 
-- Alertas ruidosos
-- HPA subótimo
-- Painel incompleto
+- Alertas ainda ruidosos e com limiares frágeis
+- HPAs básicos, sem estabilização ou métricas customizadas
+- Dashboard de latência com painéis marcados como TODO
+- A API em Go expõe métricas, mas ainda não emite traces OTLP (ótimo ponto para explorar)
 
 ## Onde mexer
 
-Os arquivos a seguir são os pontos de partida para suas alterações:
+Use estes arquivos como ponto de partida:
 
 - `infra/observability/prometheus-rules.yaml` e `alertmanager.yaml`
 - `dashboards/grafana/app-latency.json`
-- `infra/apps/orders-api/hpa.yaml`
-- `apps/orders-api` (instrumentação/flags)
+- `infra/apps/available-schedules-python/hpa.yaml` e `infra/apps/available-schedules-go/hpa.yaml`
+- `apps/available-schedules-python` e `apps/available-schedules-go` (instrumentação/flags)
 
 ## Desligar
 
@@ -89,3 +91,5 @@ make down
 - Os `helm upgrade --install` usam `--wait --atomic` com timeouts padrão pensados para clusters rodando em kind. Se quiser acelerar (ou alongar) os aguardos, exporte variáveis como `HELM_TIMEOUT_INGRESS=4m` ou `HELM_TIMEOUT_KPS=10m` antes de rodar o `make up`.
 - O `ingress-nginx` expõe HTTP/HTTPS via `NodePort` fixo (30080/30443). O arquivo `infra/kind/cluster.yaml` já faz o _port-forward_ desses NodePorts para a máquina host (80/443), mantendo o acesso via `http://dev.local`.
 - O Grafana é servido via Ingress em `http://dev.local/grafana/`; não é necessário executar `kubectl port-forward`.
+- As APIs de exemplo ficam acessíveis via ingress: Python em `/appoints/available-schedule` e Go em `/go/appoints/available-schedule`.
+- O datasource Tempo utiliza o serviço exposto na porta `3200`; o `values/kps-values.yaml` já aponta para `tempo.observability.svc.cluster.local:3200`.

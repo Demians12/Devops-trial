@@ -1,16 +1,17 @@
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: orders-api
+  name: available-schedules-go
   labels:
-    release: kps   # deve casar com o release do kube-prometheus-stack
+    release: kps
 spec:
   selector:
     matchLabels:
-      app: orders-api
+      app: available-schedules-go
   namespaceSelector:
     matchNames: [ "apps" ]
   endpoints:
     - port: http
       path: /metrics
       interval: 15s
+

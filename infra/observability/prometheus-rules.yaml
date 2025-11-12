@@ -8,13 +8,13 @@ spec:
     - name: app.availability
       rules:
         - alert: HighErrorRate
-          expr: sum(rate(http_requests_total{job="orders-api",status=~"5.."}[3m])) / sum(rate(http_requests_total{job="orders-api"}[3m])) > 0.005
+          expr: sum(rate(http_requests_total{job=~"available-schedules-(python|go)",status=~"5.."}[3m])) / sum(rate(http_requests_total{job=~"available-schedules-(python|go)"}[3m])) > 0.005
           for: 1m
-          labels: { severity: page, service: orders-api }
+          labels: { severity: page, service: available-schedules }
           annotations:
             summary: ">0.5% 5xx (1m) — pode ser ruidoso"
         - alert: HighLatencyP95
-          expr: histogram_quantile(0.95, sum by (le)(rate(http_request_duration_seconds_bucket{job="orders-api"}[3m]))) > 0.15
+          expr: histogram_quantile(0.95, sum by (le)(rate(http_request_duration_seconds_bucket{job=~"available-schedules-(python|go)"}[3m]))) > 0.15
           for: 1m
-          labels: { severity: page, service: orders-api }
+          labels: { severity: page, service: available-schedules }
           annotations: { summary: "p95 > 150ms (1m) — ruidoso" }

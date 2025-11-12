@@ -1,19 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: orders-api
-  labels: { app: orders-api }
+  name: available-schedules-python
+  labels: { app: available-schedules-python }
 spec:
   replicas: 1
   selector:
-    matchLabels: { app: orders-api }
+    matchLabels: { app: available-schedules-python }
   template:
     metadata:
-      labels: { app: orders-api }
+      labels: { app: available-schedules-python }
     spec:
       containers:
-        - name: orders-api
-          image: orders-api:local
+        - name: available-schedules-python
+          image: available-schedules-python:local
           imagePullPolicy: IfNotPresent
           env:
             - name: ERROR_RATE
@@ -21,7 +21,7 @@ spec:
             - name: EXTRA_LATENCY_MS
               value: "50"
             - name: SERVICE_NAME
-              value: "orders-api"
+              value: "available-schedules"
           ports:
             - containerPort: 8000
           resources:

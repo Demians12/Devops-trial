@@ -1,7 +1,6 @@
 SHELL := /bin/bash
 KIND_CLUSTER := devops-lab
-APP_NAME := orders-api
-APP_IMG := $(APP_NAME):local
+APPS := available-schedules-python available-schedules-go
 NAMESPACE_APPS := apps
 NAMESPACE_OBS := observability
 
@@ -45,36 +44,53 @@ up: ## Cria cluster kind e instala stack de observabilidade + ingress
 	@kubectl apply -f infra/ingress/ >/dev/null
 	$(call sublog,Ingressos aplicados)
 
-app.build: ## Build da aplicação
-	$(call log,Build da imagem $(APP_IMG))
-	@docker build -t $(APP_IMG) ./apps/$(APP_NAME) >/dev/null
-	$(call sublog,Imagem construída)
+app.build: ## Build das aplicações exemplo (Python e Go)
+	$(call log,Build das imagens de exemplo)
+	@for app in $(APPS); do \
+		printf '    - construindo %s\n' $$app; \
+		docker build -t $$app:local ./apps/$$app >/dev/null; \
+	done
+	$(call sublog,Imagens construídas)
 
-app.load: app.build ## Carrega imagem no kind
-	$(call log,Carregando imagem no cluster kind)
-	@kind load docker-image $(APP_IMG) --name $(KIND_CLUSTER) >/dev/null
-	$(call sublog,Imagem disponível no cluster)
+app.load: app.build ## Carrega imagens no kind
+	$(call log,Carregando imagens no cluster kind)
+	@for app in $(APPS); do \
+		printf '    - carregando %s\n' $$app; \
+		kind load docker-image $$app:local --name $(KIND_CLUSTER) >/dev/null; \
+	done
+	$(call sublog,Imagens carregadas)
 
-deploy: app.load ## Deploy da aplicação, HPA e ServiceMonitor
-	$(call log,Aplicando manifests da aplicação)
-	@kubectl apply -n $(NAMESPACE_APPS) -f infra/apps/$(APP_NAME)/deployment.yaml >/dev/null
-	@kubectl apply -n $(NAMESPACE_APPS) -f infra/apps/$(APP_NAME)/service.yaml >/dev/null
-	@kubectl apply -n $(NAMESPACE_APPS) -f infra/apps/$(APP_NAME)/hpa.yaml >/dev/null
-	@kubectl apply -n $(NAMESPACE_APPS) -f infra/apps/$(APP_NAME)/servicemonitor.yaml >/dev/null
+deploy: app.load ## Deploy das aplicações, HPA e ServiceMonitor
+	$(call log,Aplicando manifests das aplicações)
+	@for app in $(APPS); do \
+		printf '    - aplicando manifests de %s\n' $$app; \
+		kubectl apply -n $(NAMESPACE_APPS) -f infra/apps/$$app/deployment.yaml >/dev/null; \
+		kubectl apply -n $(NAMESPACE_APPS) -f infra/apps/$$app/service.yaml >/dev/null; \
+		if [ -f infra/apps/$$app/hpa.yaml ]; then \
+			kubectl apply -n $(NAMESPACE_APPS) -f infra/apps/$$app/hpa.yaml >/dev/null; \
+		fi; \
+		if [ -f infra/apps/$$app/servicemonitor.yaml ]; then \
+			kubectl apply -n $(NAMESPACE_APPS) -f infra/apps/$$app/servicemonitor.yaml >/dev/null; \
+		fi; \
+	done
 	$(call sublog,Recursos aplicados)
 
 load: ## Gera carga para acionar alertas
 	$(call log,Executando teste de carga (k6))
-	@k6 run tests/k6/orders_surge.js || echo "Instale k6 para rodar este alvo"
+	@k6 run tests/k6/available_schedules.js || echo "Instale k6 para rodar este alvo"
 
 fire-alerts: ## Aumenta erro/latência por 15m
 	$(call log,Ativando flags de erro/latência)
-	@kubectl -n $(NAMESPACE_APPS) set env deploy/$(APP_NAME) ERROR_RATE=0.10 EXTRA_LATENCY_MS=400 >/dev/null || true
+	@for app in $(APPS); do \
+		kubectl -n $(NAMESPACE_APPS) set env deploy/$$app ERROR_RATE=0.10 EXTRA_LATENCY_MS=400 >/dev/null || true; \
+	done
 	@echo "Mantendo flags ligadas por ~15m; depois rode 'make calm' para normalizar"
 
 calm: ## Normaliza flags
-	$(call log,Normalizando flags da aplicação)
-	@kubectl -n $(NAMESPACE_APPS) set env deploy/$(APP_NAME) ERROR_RATE=0.01 EXTRA_LATENCY_MS=0 >/dev/null || true
+	$(call log,Normalizando flags das aplicações)
+	@for app in $(APPS); do \
+		kubectl -n $(NAMESPACE_APPS) set env deploy/$$app ERROR_RATE=0.01 EXTRA_LATENCY_MS=0 >/dev/null || true; \
+	done
 
 obs.install: ## (re)instala componentes de observabilidade
 	$(call log,Reinstalando stack de observabilidade)

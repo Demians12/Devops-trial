@@ -1,0 +1,16 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: available-schedules-python
+  labels:
+    release: kps   # deve casar com o release do kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: available-schedules-python
+  namespaceSelector:
+    matchNames: [ "apps" ]
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
