@@ -23,6 +23,8 @@ Antes de começar, certifique-se de que você tem as seguintes ferramentas insta
 
 2. **Subir o Ambiente**: Crie o cluster Kubernetes local, o ingress controller e a stack de observabilidade.
 
+    > Certifique-se de que o Docker (ou Colima) está em execução e acessível pelo usuário atual antes de rodar este passo. O alvo executa um _preflight_ que checa binários obrigatórios, permissões do Docker e a entrada `dev.local` no `/etc/hosts`.
+
     ```sh
     make up
     ```
@@ -35,10 +37,11 @@ Antes de começar, certifique-se de que você tem as seguintes ferramentas insta
 
 4. **Verificar a Aplicação**: Acesse o endpoint de health check para confirmar que a aplicação está no ar.
     - `http://dev.local/healthz`
+    - A página principal (`http://dev.local/`) retorna um JSON com o status do ambiente e os endpoints principais.
 5. **Acessar o Grafana**: Explore os dashboards de monitoramento.
-    - **URL**: `http://localhost/`
+    - **URL**: `http://dev.local/grafana/`
     - **Credenciais**: admin/admin
-    - *Nota: Os datasources para Loki e Tempo já estão pré-configurados.*
+    - _Nota: Os datasources para Prometheus, Loki e Tempo já estão pré-configurados._
 6. **Gerar Carga (Opcional)**: Use o `k6` para gerar carga na aplicação e observar seu comportamento.
 
     ```sh
@@ -77,3 +80,12 @@ Para parar e limpar todos os recursos do cluster, execute:
 ```sh
 make down
 ```
+
+## Automação e Diagnóstico
+
+- O alvo `make up` executa `scripts/preflight.sh` antes de qualquer ação. Rode o script diretamente caso queira apenas validar o ambiente.
+- Caso o _preflight_ acuse falta de acesso ao Docker, inicie o Docker Desktop/Colima ou ajuste as permissões do socket (`/var/run/docker.sock` ou `$HOME/.docker/run/docker.sock` no modo rootless).
+- Se o cluster já existir, o `make up` irá reutilizá-lo automaticamente após garantir que o contexto `kind-devops-lab` está configurado.
+- Os `helm upgrade --install` usam `--wait --atomic` com timeouts padrão pensados para clusters rodando em kind. Se quiser acelerar (ou alongar) os aguardos, exporte variáveis como `HELM_TIMEOUT_INGRESS=4m` ou `HELM_TIMEOUT_KPS=10m` antes de rodar o `make up`.
+- O `ingress-nginx` expõe HTTP/HTTPS via `NodePort` fixo (30080/30443). O arquivo `infra/kind/cluster.yaml` já faz o _port-forward_ desses NodePorts para a máquina host (80/443), mantendo o acesso via `http://dev.local`.
+- O Grafana é servido via Ingress em `http://dev.local/grafana/`; não é necessário executar `kubectl port-forward`.

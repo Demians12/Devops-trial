@@ -1,15 +1,30 @@
 grafana:
   enabled: true
-  defaultDashboardsEnabled: true
+  defaultDashboardsEnabled: false
   service:
-    type: NodePort
+    type: ClusterIP
   adminUser: admin
   adminPassword: admin
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      url: http://loki.observability.svc.cluster.local:3100
+      access: proxy
+      isDefault: false
+    - name: Tempo
+      type: tempo
+      url: http://tempo.observability.svc.cluster.local:3200
+      access: proxy
+      isDefault: false
   sidecar:
     dashboards:
       enabled: true
     datasources:
       enabled: true
+  grafana.ini:
+    server:
+      root_url: "%(protocol)s://%(domain)s/grafana/"
+      serve_from_sub_path: true
 prometheus:
   prometheusSpec:
     evaluationInterval: 15s

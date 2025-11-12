@@ -6,12 +6,14 @@ from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExport
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.sdk.resources import Resource
 
 ERROR_RATE = float(os.getenv("ERROR_RATE", "0.01"))
 EXTRA_LATENCY_MS = int(os.getenv("EXTRA_LATENCY_MS", "0"))
 SERVICE_NAME = os.getenv("SERVICE_NAME", "orders-api")
 
-provider = TracerProvider()
+resource = Resource(attributes={"service.name": SERVICE_NAME})
+provider = TracerProvider(resource=resource)
 processor = BatchSpanProcessor(OTLPSpanExporter(endpoint=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT","http://otel-collector.observability.svc.cluster.local:4318/v1/traces")))
 provider.add_span_processor(processor)
 trace.set_tracer_provider(provider)
@@ -25,6 +27,10 @@ LAT = Histogram("http_request_duration_seconds", "Request latency", buckets=(0.0
 @app.get("/healthz")
 def health():
     return {"status": "ok"}
+
+@app.get("/")
+def root():
+    return {"service": SERVICE_NAME, "status": "ok", "endpoints": ["/healthz", "/api/v1/orders", "/api/v2/orders"]}
 
 @app.get("/metrics")
 def metrics():

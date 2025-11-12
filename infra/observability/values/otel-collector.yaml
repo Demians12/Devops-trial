@@ -14,14 +14,46 @@ spec:
           image: otel/opentelemetry-collector:0.103.1
           args: ["--config=/conf/otel.yaml"]
           ports:
-            - containerPort: 4318 # OTLP http
+            - name: otlp-http
+              containerPort: 4318
+            - name: health
+              containerPort: 13133
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 15
+            periodSeconds: 20
           volumeMounts:
             - name: conf
               mountPath: /conf
+          env:
+            - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+              value: http://tempo.observability.svc.cluster.local:4318
       volumes:
         - name: conf
           configMap:
             name: otel-collector-conf
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  labels:
+    app: otel-collector
+spec:
+  selector:
+    app: otel-collector
+  ports:
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -34,12 +66,16 @@ data:
       otlp:
         protocols:
           http:
+    extensions:
+      health_check:
+        endpoint: "0.0.0.0:13133"
     exporters:
       otlphttp:
         endpoint: http://tempo.observability.svc.cluster.local:4318
     processors:
       batch: {}
     service:
+      extensions: [health_check]
       pipelines:
         traces:
           receivers: [otlp]
