@@ -1,0 +1,68 @@
+{
+    "title": "Orders API — Latency & Errors",
+    "schemaVersion": 39,
+    "version": 1,
+    "timezone": "",
+    "time": { "from": "now-6h", "to": "now" },
+    "panels": [
+      {
+        "type": "timeseries",
+        "title": "RPS (req/s)",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{job=\"orders-api\"}[5m]))",
+            "instant": false
+          }
+        ]
+      },
+      {
+        "type": "timeseries",
+        "title": "Error rate 5xx (%)",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+        "targets": [
+          {
+            "expr": "100 * sum(rate(http_requests_total{job=\"orders-api\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=\"orders-api\"}[5m]))",
+            "instant": false
+          }
+        ]
+      },
+      {
+        "type": "timeseries",
+        "title": "Latency p95 por rota (TODO)",
+        "description": "Completar usando histogram_quantile por rota, ex.: histogram_quantile(0.95, sum by (route, le)(rate(http_request_duration_seconds_bucket{job=\"orders-api\"}[5m])))",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+        "targets": [
+          {
+            "expr": "",
+            "instant": false
+          }
+        ]
+      },
+      {
+        "type": "table",
+        "title": "Erros por rota (TODO)",
+        "description": "Completar com % de 5xx por rota, ex.: 100 * sum(rate(http_requests_total{job=\"orders-api\",status=~\"5..\"}[5m])) by (route) / sum(rate(http_requests_total{job=\"orders-api\"}[5m])) by (route)",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+        "targets": [
+          {
+            "expr": ""
+          }
+        ],
+        "transformations": [],
+        "options": { "showHeader": true }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "type": "query",
+          "name": "route",
+          "label": "Route",
+          "query": "label_values(http_requests_total{job=\"orders-api\"}, route)",
+          "includeAll": true,
+          "current": { "text": "All", "value": "$__all" }
+        }
+      ]
+    }
+  }

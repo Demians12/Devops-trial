@@ -11,7 +11,7 @@ data:
     datasources:
       - name: Loki
         type: loki
-        url: http://loki:3100
+        url: http://loki.observability.svc.cluster.local:3100
         access: proxy
         isDefault: false
   tempo.yaml: |
@@ -19,6 +19,6 @@ data:
     datasources:
       - name: Tempo
         type: tempo
-        url: http://tempo:3100
+        url: http://tempo.observability.svc.cluster.local:3100
         access: proxy
         isDefault: false

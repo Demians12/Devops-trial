@@ -20,6 +20,8 @@ spec:
               value: "0.02"  # ligeiramente alto
             - name: EXTRA_LATENCY_MS
               value: "50"
+            - name: SERVICE_NAME
+              value: "orders-api"
           ports:
             - containerPort: 8000
           resources:
