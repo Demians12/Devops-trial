@@ -1,7 +1,7 @@
 import os
 import random
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time as dt_time, date as dt_date
 from functools import wraps
 
 from fastapi import FastAPI, Response
@@ -39,29 +39,129 @@ LAT = Histogram(
     buckets=(0.05, 0.1, 0.2, 0.3, 0.5, 0.75, 1, 2, 5),
 )
 
+PROFESSIONALS = [
+    {
+        "id": 2684,
+        "name": "Dr(a). Pat Duarte",
+        "specialty": {"id": 55, "name": "Cardiologia"},
+    },
+    {
+        "id": 512,
+        "name": "Dr. Ícaro Menezes",
+        "specialty": {"id": 77, "name": "Dermatologia"},
+    },
+    {
+        "id": 782,
+        "name": "Dr(a). Helena Faria",
+        "specialty": {"id": 33, "name": "Pediatria"},
+    },
+    {
+        "id": 903,
+        "name": "Dr. André Ribeiro",
+        "specialty": {"id": 18, "name": "Ortopedia"},
+    },
+]
 
-def build_available_schedule(professional_id: int, unit_id: int, days: int = 3):
-    base = datetime.utcnow()
-    slots = []
+UNITS = [
+    {"id": 901, "name": "Clínica Central", "room": {"id": 12, "name": "Sala Azul"}},
+    {"id": 905, "name": "Unidade Bela Vista", "room": {"id": 203, "name": "Consultório 3"}},
+    {"id": 910, "name": "Centro Norte", "room": {"id": 21, "name": "Sala Verde"}},
+    {"id": 915, "name": "Hub Telemedicina", "room": {"id": 7, "name": "Estúdio 1"}},
+]
+
+
+def align_to_half_hour(dt: datetime) -> datetime:
+    minute = dt.minute
+    remainder = minute % 30
+    if remainder != 0:
+        dt += timedelta(minutes=30 - remainder)
+    return dt.replace(second=0, microsecond=0)
+
+
+def resolve_professional(professional_id: int):
+    for professional in PROFESSIONALS:
+        if professional["id"] == professional_id:
+            return professional
+    return PROFESSIONALS[0]
+
+
+def resolve_unit(unit_id: int):
+    for unit in UNITS:
+        if unit["id"] == unit_id:
+            return unit
+    return UNITS[0]
+
+
+def normalize_start_date(requested: dt_date | None, today: dt_date) -> dt_date:
+    if requested is None:
+        return today
+    if requested < today:
+        return today
+    return requested
+
+
+def build_schedule_payload(
+    professional_id: int,
+    unit_id: int,
+    days: int = 15,
+    start_date: dt_date | None = None,
+):
+    professional = resolve_professional(professional_id)
+    unit = resolve_unit(unit_id)
+
+    days = max(15, min(days, 30))
+    now = datetime.utcnow()
+    today = now.date()
+    base_date = normalize_start_date(start_date, today)
+
+    schedules = []
+
     for offset in range(days):
-        date = base + timedelta(days=offset)
-        available_hours = [
-            {"start": (date + timedelta(hours=9, minutes=30 * i)).strftime("%H:%M")}
-            for i in range(0, 6)
-        ]
-        slots.append(
+        day_date = base_date + timedelta(days=offset)
+        is_today = day_date == today
+
+        if offset == 0:
+            if is_today:
+                start = align_to_half_hour(now + timedelta(minutes=15))
+            else:
+                start = datetime.combine(day_date, dt_time(hour=8, minute=0))
+        else:
+            start = datetime.combine(day_date, dt_time(hour=8, minute=0))
+
+        morning = datetime.combine(day_date, dt_time(hour=8, minute=0))
+        if start < morning:
+            start = morning
+
+        slots = []
+        current = start
+        limit = datetime.combine(day_date, dt_time(hour=18, minute=0))
+        if current > limit:
+            continue
+
+        while len(slots) < 8 and current <= limit:
+            slots.append(
+                {
+                    "start": current.strftime("%H:%M"),
+                    "available": random.random() > 0.25,
+                }
+            )
+            current = current + timedelta(minutes=30)
+
+        schedules.append(
             {
-                "date": date.strftime("%Y-%m-%d"),
-                "hours": [hour["start"] for hour in available_hours],
+                "professional": {
+                    "id": professional["id"],
+                    "name": professional["name"],
+                },
+                "unit": {"id": unit["id"], "name": unit["name"]},
+                "room": unit.get("room"),
+                "specialty": professional["specialty"],
+                "date": day_date.strftime("%Y-%m-%d"),
+                "slots": slots,
             }
         )
-    return {
-        "professional": {"id": professional_id, "name": "Dr(a). Pat Duarte"},
-        "unit": {"id": unit_id, "name": "Clínica Central"},
-        "room": {"id": 12, "name": "Sala Azul"},
-        "specialty": {"id": 55, "name": "Cardiologia"},
-        "schedules": slots,
-    }
+
+    return schedules
 
 
 def observe_route(route: str):
@@ -107,8 +207,8 @@ def root():
         "endpoints": [
             "/healthz",
             "/metrics",
-            "/appoints/available-schedule",
-            "/go/appoints/available-schedule",
+            "/v1/appoints/available-schedule",
+            "/v2/appoints/available-schedule",
         ],
     }
 
@@ -118,21 +218,31 @@ def metrics():
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
-@app.get("/appoints/available-schedule")
-@observe_route("/appoints/available-schedule")
-def available_schedule(professional_id: int = 2684, unit_id: int = 901):
-    payload = {
+@app.get("/v1/appoints/available-schedule")
+@observe_route("/v1/appoints/available-schedule")
+def available_schedule(
+    professional_id: int = 2684,
+    unit_id: int = 901,
+    days: int = 15,
+    start_date: dt_date | None = None,
+):
+    days_requested = days
+    normalized_days = max(15, min(days_requested, 30))
+    today = datetime.utcnow().date()
+    base_date = normalize_start_date(start_date, today)
+    schedules = build_schedule_payload(
+        professional_id, unit_id, normalized_days, start_date=base_date
+    )
+    return {
         "success": True,
         "filters": {
             "professional_id": professional_id,
             "unit_id": unit_id,
             "generated_at": datetime.utcnow().isoformat(),
+            "days_requested": days_requested,
+            "days_returned": normalized_days,
+            "start_date_requested": start_date.isoformat() if start_date else None,
+            "start_date_applied": base_date.isoformat(),
         },
-        "response": [build_available_schedule(professional_id, unit_id)],
+        "response": schedules,
     }
-    return payload
-
-
-@app.get("/python/appoints/available-schedule")
-def available_schedule_prefixed(professional_id: int = 2684, unit_id: int = 901):
-    return available_schedule(professional_id=professional_id, unit_id=unit_id)

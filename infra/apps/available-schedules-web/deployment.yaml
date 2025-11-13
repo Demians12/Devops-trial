@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: available-schedules-web
+  labels: { app: available-schedules-web }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: available-schedules-web }
+  template:
+    metadata:
+      labels: { app: available-schedules-web }
+    spec:
+      containers:
+        - name: available-schedules-web
+          image: available-schedules-web:local
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "3000"
+          ports:
+            - containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests: { cpu: "30m", memory: "64Mi" }
+            limits:   { cpu: "150m", memory: "192Mi" }
+

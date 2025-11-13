@@ -43,6 +43,15 @@ jobs:
         working-directory: apps/available-schedules-go
         run: go build ./...
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Verify frontend dependencies
+        working-directory: apps/available-schedules-web
+        run: npm install --omit=dev
+
       - name: Upload test report (JUnit)
         if: always()
         uses: actions/upload-artifact@v4

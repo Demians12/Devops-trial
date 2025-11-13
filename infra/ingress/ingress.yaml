@@ -9,17 +9,17 @@ spec:
     - host: dev.local
       http:
         paths:
-          - path: /appoints
+          - path: /v1
             pathType: Prefix
             backend:
               service:
                 name: available-schedules-python
                 port: { number: 80 }
-          - path: /python
+          - path: /v2
             pathType: Prefix
             backend:
               service:
-                name: available-schedules-python
+                name: available-schedules-go
                 port: { number: 80 }
           - path: /metrics
             pathType: Prefix
@@ -33,15 +33,15 @@ spec:
               service:
                 name: available-schedules-python
                 port: { number: 80 }
-          - path: /go
+          - path: /assets
             pathType: Prefix
             backend:
               service:
-                name: available-schedules-go
+                name: available-schedules-web
                 port: { number: 80 }
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: available-schedules-python
+                name: available-schedules-web
                 port: { number: 80 }
