@@ -132,7 +132,6 @@ func parseIntEnv(key string, fallback int) int {
 
 type scheduleSlot struct {
 	Start     string `json:"start"`
-	End       string `json:"end"`
 	Available bool   `json:"available"`
 }
 
@@ -151,39 +150,77 @@ type availableScheduleResponse struct {
 	Data    []schedulePayload      `json:"response"`
 }
 
-func buildSchedule(professionalID, unitID int, days int) []schedulePayload {
-	base := time.Now().UTC()
+func normalizeStartDate(requested time.Time, now time.Time) time.Time {
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	if requested.Before(today) {
+		return today
+	}
+	return time.Date(requested.Year(), requested.Month(), requested.Day(), 0, 0, 0, 0, time.UTC)
+}
+
+func buildSchedule(professionalID, unitID int, days int, startDate time.Time) []schedulePayload {
+	now := time.Now().UTC()
+	if days < 15 {
+		days = 15
+	}
+	if days > 30 {
+		days = 30
+	}
+
+	prof := resolveProfessional(professionalID)
+	unit := resolveUnit(unitID)
+
+	baseDate := normalizeStartDate(startDate, now)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+
 	response := make([]schedulePayload, 0, days)
 	for i := 0; i < days; i++ {
-		current := base.Add(time.Duration(i) * 24 * time.Hour)
-		slots := make([]scheduleSlot, 0, 6)
-		for step := 0; step < 6; step++ {
-			start := current.Add(time.Hour*9 + time.Minute*time.Duration(30*step))
-			end := start.Add(30 * time.Minute)
+		currentDate := baseDate.AddDate(0, 0, i)
+		var start time.Time
+		if i == 0 {
+			if currentDate.Equal(today) {
+				start = alignToHalfHour(now.Add(15 * time.Minute))
+			} else {
+				start = time.Date(currentDate.Year(), currentDate.Month(), currentDate.Day(), 8, 0, 0, 0, time.UTC)
+			}
+		} else {
+			start = time.Date(currentDate.Year(), currentDate.Month(), currentDate.Day(), 8, 0, 0, 0, time.UTC)
+		}
+
+		limit := time.Date(currentDate.Year(), currentDate.Month(), currentDate.Day(), 18, 0, 0, 0, time.UTC)
+		morning := time.Date(currentDate.Year(), currentDate.Month(), currentDate.Day(), 8, 0, 0, 0, time.UTC)
+		if start.Before(morning) {
+			start = morning
+		}
+		if start.After(limit) {
+			continue
+		}
+
+		slots := make([]scheduleSlot, 0, 8)
+
+		for len(slots) < 8 && !start.After(limit) {
 			slots = append(slots, scheduleSlot{
 				Start:     start.Format("15:04"),
-				End:       end.Format("15:04"),
 				Available: rand.Intn(10) > 1,
 			})
+			start = start.Add(30 * time.Minute)
 		}
+
 		payload := schedulePayload{
 			Professional: map[string]interface{}{
-				"id":   professionalID,
-				"name": "Dr(a). Júlia Fontes",
+				"id":   prof.ID,
+				"name": prof.Name,
 			},
 			Unit: map[string]interface{}{
-				"id":   unitID,
-				"name": "Unidade Bela Vista",
+				"id":   unit.ID,
+				"name": unit.Name,
 			},
-			Room: map[string]interface{}{
-				"id":   203,
-				"name": "Consultório 3",
-			},
+			Room: unit.Room,
 			Specialty: map[string]interface{}{
-				"id":   77,
-				"name": "Dermatologia",
+				"id":   prof.Specialty.ID,
+				"name": prof.Specialty.Name,
 			},
-			Date:  current.Format("2006-01-02"),
+			Date:  currentDate.Format("2006-01-02"),
 			Slots: slots,
 		}
 		response = append(response, payload)
@@ -196,6 +233,64 @@ type server struct {
 	errorRate   float64
 	extraDelay  time.Duration
 	metrics     *metricsStore
+}
+
+type specialty struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+type professional struct {
+	ID        int       `json:"id"`
+	Name      string    `json:"name"`
+	Specialty specialty `json:"specialty"`
+}
+
+type unitInfo struct {
+	ID   int                    `json:"id"`
+	Name string                 `json:"name"`
+	Room map[string]interface{} `json:"room"`
+}
+
+var professionals = []professional{
+	{ID: 2684, Name: "Dr(a). Pat Duarte", Specialty: specialty{ID: 55, Name: "Cardiologia"}},
+	{ID: 512, Name: "Dr. Ícaro Menezes", Specialty: specialty{ID: 77, Name: "Dermatologia"}},
+	{ID: 782, Name: "Dr(a). Helena Faria", Specialty: specialty{ID: 33, Name: "Pediatria"}},
+	{ID: 903, Name: "Dr. André Ribeiro", Specialty: specialty{ID: 18, Name: "Ortopedia"}},
+}
+
+var units = []unitInfo{
+	{ID: 901, Name: "Clínica Central", Room: map[string]interface{}{"id": 12, "name": "Sala Azul"}},
+	{ID: 905, Name: "Unidade Bela Vista", Room: map[string]interface{}{"id": 203, "name": "Consultório 3"}},
+	{ID: 910, Name: "Centro Norte", Room: map[string]interface{}{"id": 21, "name": "Sala Verde"}},
+	{ID: 915, Name: "Hub Telemedicina", Room: map[string]interface{}{"id": 7, "name": "Estúdio 1"}},
+}
+
+func alignToHalfHour(t time.Time) time.Time {
+	minute := t.Minute()
+	remainder := minute % 30
+	if remainder != 0 {
+		t = t.Add(time.Duration(30-remainder) * time.Minute)
+	}
+	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), 0, 0, time.UTC)
+}
+
+func resolveProfessional(id int) professional {
+	for _, p := range professionals {
+		if p.ID == id {
+			return p
+		}
+	}
+	return professionals[0]
+}
+
+func resolveUnit(id int) unitInfo {
+	for _, u := range units {
+		if u.ID == id {
+			return u
+		}
+	}
+	return units[0]
 }
 
 func (s *server) instrument(route string, next http.HandlerFunc) http.HandlerFunc {
@@ -237,9 +332,9 @@ func (s *server) handleRoot(w http.ResponseWriter, _ *http.Request) {
 		"service": s.serviceName,
 		"status":  "ok",
 		"endpoints": []string{
-			"/go/appoints/available-schedule",
-			"/go/healthz",
-			"/go/metrics",
+			"/v2/appoints/available-schedule",
+			"/v2/healthz",
+			"/v2/metrics",
 		},
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -261,9 +356,25 @@ func (s *server) handleAvailableSchedule(w http.ResponseWriter, r *http.Request)
 	if unitID == 0 {
 		unitID = 108
 	}
-	days, _ := strconv.Atoi(query.Get("days"))
-	if days <= 0 || days > 7 {
-		days = 3
+	daysRequested, err := strconv.Atoi(query.Get("days"))
+	if err != nil || daysRequested <= 0 {
+		daysRequested = 15
+	}
+	days := daysRequested
+	if days < 15 {
+		days = 15
+	}
+	if days > 30 {
+		days = 30
+	}
+
+	startDateRequested := query.Get("start_date")
+	now := time.Now().UTC()
+	startDate := now
+	if startDateRequested != "" {
+		if parsed, err := time.Parse("2006-01-02", startDateRequested); err == nil {
+			startDate = normalizeStartDate(parsed, now)
+		}
 	}
 
 	response := availableScheduleResponse{
@@ -272,9 +383,17 @@ func (s *server) handleAvailableSchedule(w http.ResponseWriter, r *http.Request)
 			"generated_at":    time.Now().UTC().Format(time.RFC3339),
 			"professional_id": professionalID,
 			"unit_id":         unitID,
-			"days":            days,
+			"days_requested":  daysRequested,
+			"days_returned":   days,
+			"start_date_requested": func() interface{} {
+				if startDateRequested == "" {
+					return nil
+				}
+				return startDateRequested
+			}(),
+			"start_date_applied": startDate.Format("2006-01-02"),
 		},
-		Data: buildSchedule(professionalID, unitID, days),
+		Data: buildSchedule(professionalID, unitID, days, startDate),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -306,12 +425,12 @@ func main() {
 
 	// Root handlers
 	http.HandleFunc("/", app.handleRoot)
-	http.HandleFunc("/go", app.handleRoot)
-	http.HandleFunc("/go/healthz", app.handleHealth)
+	http.HandleFunc("/v2", app.handleRoot)
+	http.HandleFunc("/v2/healthz", app.handleHealth)
 	http.HandleFunc("/healthz", app.handleHealth)
 
 	// Metrics endpoint shared between prefixes
-	http.HandleFunc("/go/metrics", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/v2/metrics", func(w http.ResponseWriter, r *http.Request) {
 		app.metrics.writePrometheus(w)
 	})
 	http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
@@ -319,7 +438,7 @@ func main() {
 	})
 
 	// Schedule handlers
-	http.HandleFunc("/go/appoints/available-schedule", app.instrument("/go/appoints/available-schedule", app.handleAvailableSchedule))
+	http.HandleFunc("/v2/appoints/available-schedule", app.instrument("/v2/appoints/available-schedule", app.handleAvailableSchedule))
 
 	// Friendly alias if the service is accessed directly (without ingress prefix)
 	http.HandleFunc("/appoints/available-schedule", app.instrument("/appoints/available-schedule", app.handleAvailableSchedule))

@@ -1,6 +1,7 @@
 SHELL := /bin/bash
 KIND_CLUSTER := devops-lab
-APPS := available-schedules-python available-schedules-go
+APPS := available-schedules-python available-schedules-go available-schedules-web
+BACKEND_APPS := available-schedules-python available-schedules-go
 NAMESPACE_APPS := apps
 NAMESPACE_OBS := observability
 
@@ -81,14 +82,14 @@ load: ## Gera carga para acionar alertas
 
 fire-alerts: ## Aumenta erro/latência por 15m
 	$(call log,Ativando flags de erro/latência)
-	@for app in $(APPS); do \
+	@for app in $(BACKEND_APPS); do \
 		kubectl -n $(NAMESPACE_APPS) set env deploy/$$app ERROR_RATE=0.10 EXTRA_LATENCY_MS=400 >/dev/null || true; \
 	done
 	@echo "Mantendo flags ligadas por ~15m; depois rode 'make calm' para normalizar"
 
 calm: ## Normaliza flags
 	$(call log,Normalizando flags das aplicações)
-	@for app in $(APPS); do \
+	@for app in $(BACKEND_APPS); do \
 		kubectl -n $(NAMESPACE_APPS) set env deploy/$$app ERROR_RATE=0.01 EXTRA_LATENCY_MS=0 >/dev/null || true; \
 	done
 

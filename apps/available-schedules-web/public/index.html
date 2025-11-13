@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DevOps Trial Task</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'><circle cx='40' cy='40' r='36' fill='%230ea5e9'/><path d='M24 40h32M40 24v32' stroke='%23fff' stroke-width='8' stroke-linecap='round'/></svg>" />
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body class="min-h-screen bg-slate-950 text-slate-100">
+    <header class="bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 shadow-xl sticky top-0 z-40">
+      <div class="max-w-5xl mx-auto px-6 py-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 class="text-3xl font-semibold tracking-tight">DevOps Trial Task</h1>
+          <p class="text-slate-100/80 text-sm md:text-base">
+            Agendamento online de agendas médicas – compare as versões v1 (Python) e v2 (Go) simulando a disponibilização de horários.
+          </p>
+        </div>
+        <div class="flex items-center gap-3 bg-white/10 backdrop-blur rounded-full px-4 py-2">
+          <span class="inline-flex h-3 w-3 rounded-full bg-emerald-400 shadow pulse"></span>
+          <span class="text-sm font-medium uppercase tracking-wide">Ambiente local ativo</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-6 py-10 space-y-10">
+      <section class="bg-slate-900/70 border border-slate-800 rounded-3xl p-6 md:p-8 shadow-2xl shadow-slate-950/50">
+        <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
+          <div class="space-y-3">
+            <h2 class="text-2xl font-semibold text-slate-100">Escolha a versão da API</h2>
+            <p class="text-slate-400 max-w-2xl">
+              A versão v1 é servida em Python (FastAPI) e a v2 em Go (net/http).
+            </p>
+          </div>
+          <div class="flex flex-col sm:flex-row gap-4">
+            <label class="flex flex-col text-sm text-slate-300 gap-2">
+              Profissional
+              <select id="input-professional" class="input"></select>
+            </label>
+            <label class="flex flex-col text-sm text-slate-300 gap-2">
+              Unidade
+              <select id="input-unit" class="input"></select>
+            </label>
+            <input id="input-days" type="hidden" value="15" />
+          </div>
+        </div>
+
+        <div class="mt-8 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div class="relative inline-flex">
+            <select id="version-select" class="input pr-10 font-medium">
+              <option value="v1">API v1 — Python (FastAPI)</option>
+              <option value="v2">API v2 — Go (net/http)</option>
+            </select>
+            <span class="absolute inset-y-0 right-3 flex items-center pointer-events-none text-slate-400">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </span>
+          </div>
+          <button id="refresh-btn" class="btn-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M4 4v6h6M20 20v-6h-6M5 19A9 9 0 0119 5l1 1" />
+            </svg>
+            Atualizar disponibilidade
+          </button>
+        </div>
+      </section>
+
+      <section class="space-y-6">
+        <div id="status-banner" class="hidden rounded-2xl px-4 py-3 text-sm font-medium"></div>
+
+        <div class="grid gap-6 lg:grid-cols-[minmax(0,280px)_1fr]">
+          <aside class="calendar-card">
+            <div class="calendar-card__header">
+              <button id="calendar-prev" class="calendar-nav" aria-label="Mês anterior">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <div class="text-sm font-semibold tracking-wide text-slate-100 uppercase" id="calendar-month"></div>
+              <button id="calendar-next" class="calendar-nav" aria-label="Próximo mês">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+            <div class="calendar-grid" id="calendar-grid"></div>
+            <div class="calendar-legend">
+              <span class="legend-dot legend-dot--available"></span>
+              <span>Data disponível</span>
+              <span class="legend-dot legend-dot--selected"></span>
+              <span>Data selecionada</span>
+            </div>
+          </aside>
+
+          <div class="space-y-5">
+            <div id="selection-summary" class="rounded-2xl border border-slate-800 bg-slate-900/70 px-4 py-4 text-sm text-slate-300 hidden"></div>
+
+            <div id="skeleton" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3 hidden">
+              <div class="skeleton-card"></div>
+              <div class="skeleton-card"></div>
+              <div class="skeleton-card"></div>
+            </div>
+
+            <div id="cards-wrapper" class="grid gap-6 md:grid-cols-2 xl:grid-cols-3"></div>
+            <div id="empty-state" class="hidden">
+              <div class="rounded-3xl border border-slate-800 bg-slate-900/70 p-12 text-center space-y-5">
+                <div class="flex justify-center">
+                  <div class="h-16 w-16 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11.25 11.25l-3.5 3.5m7-7l-1.75 1.75M8 7h8m0 0l-3-3m3 3l-3 3M3 13h18M6 17h12" />
+                    </svg>
+                  </div>
+                </div>
+                <h3 class="text-xl font-semibold text-slate-100">Nenhum horário disponível</h3>
+                <p class="text-slate-400 max-w-md mx-auto">
+                  Ajuste os filtros ou alterne a versão da API para simular outros cenários.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="border-t border-slate-800 bg-slate-950/80">
+      <div class="max-w-5xl mx-auto px-6 py-6 text-sm text-slate-500 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <p>&copy; <span id="year"></span> DevOps Trial Task · feito com ❤️ para a Docplanner.</p>
+        <div class="flex gap-6 text-slate-400">
+          <a href="http://dev.local/v1/appoints/available-schedule" target="_blank" rel="noopener noreferrer" class="hover:text-cyan-400 transition-colors">API v1</a>
+          <a href="http://dev.local/v2/appoints/available-schedule" target="_blank" rel="noopener noreferrer" class="hover:text-cyan-400 transition-colors">API v2</a>
+          <a href="http://dev.local/grafana/" target="_blank" rel="noopener noreferrer" class="hover:text-cyan-400 transition-colors">Grafana</a>
+        </div>
+      </div>
+    </footer>
+
+    <template id="card-template">
+      <article class="schedule-card">
+        <div class="schedule-card__header">
+          <div>
+            <h3 class="schedule-card__title"></h3>
+            <p class="schedule-card__subtitle"></p>
+          </div>
+          <span class="badge"></span>
+        </div>
+        <div class="schedule-card__body">
+          <dl class="schedule-card__meta">
+            <div><dt>Profissional</dt><dd data-professional></dd></div>
+            <div><dt>Especialidade</dt><dd data-specialty></dd></div>
+            <div><dt>Unidade</dt><dd data-unit></dd></div>
+            <div><dt>Sala</dt><dd data-room></dd></div>
+          </dl>
+          <div class="grid gap-3" data-slots></div>
+        </div>
+      </article>
+    </template>
+
+    <dialog id="booking-modal" class="modal hidden">
+      <div class="modal__overlay" data-modal-close></div>
+      <div class="modal__content">
+        <header class="modal__header">
+          <div>
+            <h3 class="modal__title">Agendamento realizado com sucesso</h3>
+            <p class="modal__subtitle">As informações abaixo simulam o payload que seria enviado para o backend.</p>
+          </div>
+          <button class="modal__close" type="button" data-modal-close aria-label="Fechar modal">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </header>
+        <section class="modal__body">
+          <dl class="modal__details" id="booking-details"></dl>
+        </section>
+        <footer class="modal__footer">
+          <button class="btn-primary modal__primary" type="button" data-modal-close>Fechar</button>
+        </footer>
+      </div>
+    </dialog>
+
+    <script src="/assets/app.js" type="module"></script>
+  </body>
+</html>
+

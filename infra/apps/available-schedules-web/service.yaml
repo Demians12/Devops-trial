@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: available-schedules-web
+  labels: { app: available-schedules-web }
+spec:
+  selector: { app: available-schedules-web }
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000
+
