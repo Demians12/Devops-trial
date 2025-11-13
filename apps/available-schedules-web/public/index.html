@@ -24,86 +24,66 @@
     </header>
 
     <main class="max-w-5xl mx-auto px-6 py-10 space-y-10">
-      <section class="bg-slate-900/70 border border-slate-800 rounded-3xl p-6 md:p-8 shadow-2xl shadow-slate-950/50">
-        <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
-          <div class="space-y-3">
-            <h2 class="text-2xl font-semibold text-slate-100">Escolha a versão da API</h2>
-            <p class="text-slate-400 max-w-2xl">
-              A versão v1 é servida em Python (FastAPI) e a v2 em Go (net/http).
-            </p>
-          </div>
-          <div class="flex flex-col sm:flex-row gap-4">
-            <label class="flex flex-col text-sm text-slate-300 gap-2">
-              Profissional
-              <select id="input-professional" class="input"></select>
-            </label>
-            <label class="flex flex-col text-sm text-slate-300 gap-2">
-              Unidade
-              <select id="input-unit" class="input"></select>
-            </label>
-            <input id="input-days" type="hidden" value="15" />
-          </div>
-        </div>
-
-        <div class="mt-8 flex flex-col sm:flex-row sm:items-center gap-4">
-          <div class="relative inline-flex">
-            <select id="version-select" class="input pr-10 font-medium">
-              <option value="v1">API v1 — Python (FastAPI)</option>
-              <option value="v2">API v2 — Go (net/http)</option>
-            </select>
-            <span class="absolute inset-y-0 right-3 flex items-center pointer-events-none text-slate-400">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-              </svg>
-            </span>
-          </div>
-          <button id="refresh-btn" class="btn-primary">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M4 4v6h6M20 20v-6h-6M5 19A9 9 0 0119 5l1 1" />
-            </svg>
-            Atualizar disponibilidade
-          </button>
-        </div>
-      </section>
-
       <section class="space-y-6">
-        <div id="status-banner" class="hidden rounded-2xl px-4 py-3 text-sm font-medium"></div>
-
-        <div class="grid gap-6 lg:grid-cols-[minmax(0,280px)_1fr]">
-          <aside class="calendar-card">
-            <div class="calendar-card__header">
-              <button id="calendar-prev" class="calendar-nav" aria-label="Mês anterior">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              <div class="text-sm font-semibold tracking-wide text-slate-100 uppercase" id="calendar-month"></div>
-              <button id="calendar-next" class="calendar-nav" aria-label="Próximo mês">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
+        <div class="layout-grid">
+          <aside class="layout-sidebar">
+            <div class="sidebar-panel">
+              <label class="sidebar-label" for="input-professional">Profissional</label>
+              <select id="input-professional" class="input"></select>
             </div>
-            <div class="calendar-grid" id="calendar-grid"></div>
-            <div class="calendar-legend">
-              <span class="legend-dot legend-dot--available"></span>
-              <span>Data disponível</span>
-              <span class="legend-dot legend-dot--selected"></span>
-              <span>Data selecionada</span>
+            <div class="sidebar-panel">
+              <label class="sidebar-label" for="input-unit">Unidade</label>
+              <select id="input-unit" class="input"></select>
+            </div>
+            <input id="input-days" type="hidden" value="15" />
+            <button id="refresh-btn" class="btn-primary sidebar-refresh">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M4 4v6h6M20 20v-6h-6M5 19A9 9 0 0119 5l1 1" />
+              </svg>
+              Atualizar disponibilidade
+            </button>
+
+            <div class="calendar-card mt-8">
+              <div class="calendar-card__header">
+                <button id="calendar-prev" class="calendar-nav" aria-label="Mês anterior">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <div class="text-sm font-semibold tracking-wide text-slate-100 uppercase" id="calendar-month"></div>
+                <button id="calendar-next" class="calendar-nav" aria-label="Próximo mês">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+              <div class="calendar-grid" id="calendar-grid"></div>
+              <div class="calendar-legend">
+                <span class="legend-dot legend-dot--available"></span>
+                <span>Data disponível</span>
+                <span class="legend-dot legend-dot--selected"></span>
+                <span>Data selecionada</span>
+              </div>
+            </div>
+
+            <div class="sidebar-footer">
+              <label class="sidebar-label" for="version-select">Versão da API</label>
+              <select id="version-select" class="input">
+                <option value="v1">API v1 — Python (FastAPI)</option>
+                <option value="v2">API v2 — Go (net/http)</option>
+              </select>
             </div>
           </aside>
 
-          <div class="space-y-5">
-            <div id="selection-summary" class="rounded-2xl border border-slate-800 bg-slate-900/70 px-4 py-4 text-sm text-slate-300 hidden"></div>
-
+          <div class="layout-content">
             <div id="skeleton" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3 hidden">
               <div class="skeleton-card"></div>
               <div class="skeleton-card"></div>
               <div class="skeleton-card"></div>
             </div>
 
-            <div id="cards-wrapper" class="grid gap-6 md:grid-cols-2 xl:grid-cols-3"></div>
+            <div id="cards-wrapper" class="schedule-grid"></div>
             <div id="empty-state" class="hidden">
               <div class="rounded-3xl border border-slate-800 bg-slate-900/70 p-12 text-center space-y-5">
                 <div class="flex justify-center">
@@ -119,6 +99,8 @@
                 </p>
               </div>
             </div>
+
+            <div id="status-banner" class="hidden rounded-2xl px-4 py-3 text-sm font-medium"></div>
           </div>
         </div>
       </section>

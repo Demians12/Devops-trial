@@ -102,6 +102,7 @@ helm_install "Instalando Tempo" \
 
 apply_manifest "Aplicando OTel Collector" observability infra/observability/values/otel-collector.yaml
 apply_manifest "Aplicando datasources Grafana" observability infra/observability/grafana-datasources.yaml
+apply_manifest "Aplicando dashboards Grafana" observability infra/observability/grafana-dashboards.yaml
 apply_manifest "Aplicando Alertmanager" observability infra/observability/alertmanager.yaml
 apply_manifest "Aplicando PrometheusRules" observability infra/observability/prometheus-rules.yaml
 apply_manifest "Aplicando webhook debug de alertas" observability infra/observability/alert-debugger/deploy.yaml

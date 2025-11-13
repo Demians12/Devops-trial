@@ -1,0 +1,115 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-app-latency
+  namespace: observability
+  labels:
+    grafana_dashboard: "1"
+data:
+  app-latency.json: |
+    {
+      "title": "Available Schedules — Latency & Errors",
+      "schemaVersion": 39,
+      "version": 1,
+      "timezone": "",
+      "time": { "from": "now-6h", "to": "now" },
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "RPS (req/s)",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps"
+            }
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(http_requests_total{job=~\"available-schedules-(python|go)\"}[5m]))",
+              "instant": false
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Error rate 5xx (%)",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent"
+            }
+          },
+          "targets": [
+            {
+              "expr": "100 * sum(rate(http_requests_total{job=~\"available-schedules-(python|go)\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=~\"available-schedules-(python|go)\"}[5m]))",
+              "instant": false
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Latency p95 por rota",
+          "description": "histogram_quantile(0.95, sum by (route, le)(rate(http_request_duration_seconds_bucket{job=~\"available-schedules-(python|go)\"}[5m])))",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            }
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (route, le)(rate(http_request_duration_seconds_bucket{job=~\"available-schedules-(python|go)\"}[5m])))",
+              "legendFormat": "{{route}}",
+              "instant": false
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "title": "Percentual de 5xx por rota",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+          "targets": [
+            {
+              "expr": "100 * sum(rate(http_requests_total{job=~\"available-schedules-(python|go)\",status=~\"5..\"}[5m])) by (route) / sum(rate(http_requests_total{job=~\"available-schedules-(python|go)\"}[5m])) by (route)",
+              "format": "table",
+              "instant": false
+            }
+          ],
+          "transformations": []
+        },
+        {
+          "type": "timeseries",
+          "title": "Tempo de resposta do frontend",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ms"
+            }
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (le)(rate(http_request_duration_seconds_bucket{job=\"available-schedules-web\"}[5m])))",
+              "legendFormat": "p95",
+              "instant": false
+            },
+            {
+              "expr": "histogram_quantile(0.50, sum by (le)(rate(http_request_duration_seconds_bucket{job=\"available-schedules-web\"}[5m])))",
+              "legendFormat": "p50",
+              "instant": false
+            }
+          ]
+        }
+      ],
+      "templating": {
+        "list": [
+          {
+            "type": "query",
+            "name": "route",
+            "label": "Route",
+            "query": "label_values(http_requests_total{job=~\"available-schedules-(python|go)\"}, route)",
+            "includeAll": true,
+            "current": { "text": "All", "value": "$__all" }
+          }
+        ]
+      }
+    }
