@@ -61,7 +61,7 @@ const VERSION_META = {
   },
 };
 
-const DISPLAY_CARD_COUNT = 3;
+const DISPLAY_CARD_COUNT = 2;
 const MIN_DAYS_WINDOW = 15;
 const MAX_CACHE_WINDOW_DAYS = 120;
 
@@ -242,6 +242,9 @@ async function fetchSchedules(version, options = {}) {
 }
 
 function renderSelectionSummary(version, payload) {
+  if (!selectionSummary) {
+    return;
+  }
   const filters = payload?.filters;
   if (!filters) {
     selectionSummary.classList.add("hidden");

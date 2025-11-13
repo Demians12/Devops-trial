@@ -880,3 +880,69 @@ body {
 .modal__primary {
   min-width: 140px;
 }
+
+.layout-grid {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: minmax(0, 320px) 1fr;
+  align-items: start;
+}
+
+@media (max-width: 1023px) {
+  .layout-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.layout-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.sidebar-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sidebar-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #cbd5e1;
+}
+
+.sidebar-refresh {
+  width: 100%;
+  justify-content: center;
+}
+
+.sidebar-footer {
+  margin-top: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.layout-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.mt-8 {
+  margin-top: 2rem;
+}
+
+.schedule-grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+#status-banner {
+  position: relative;
+  width: 100%;
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+}
