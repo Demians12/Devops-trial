@@ -1,6 +1,6 @@
-# DevOps Senior — Trial Task
+# DevOps — Trial Task
 
-Este repositório contém a infraestrutura base do desafio de DevOps Senior. O ambiente traz duas APIs de exemplo (Python e Go) que expõem dados fictícios de agendas médicas. Sua missão é evoluir automação, observabilidade e confiabilidade a partir desse ponto de partida.
+Este repositório contém a infraestrutura base do desafio de DevOps. O ambiente traz duas APIs de exemplo (Python e Go) que expõem dados fictícios de agendas médicas. Sua missão é evoluir automação, observabilidade e confiabilidade a partir desse ponto de partida.
 
 ## Requisitos
 
