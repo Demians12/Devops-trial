@@ -15,8 +15,25 @@ metadata:
 data:
   alertmanager.yaml: |
     route:
-      receiver: webhook
+      receiver: ticket-webhook
+      group_by: ['alertname', 'service', 'slo']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 2h
+      routes:
+        - matchers:
+            - severity="page"
+          receiver: page-webhook
+          repeat_interval: 30m
+        - matchers:
+            - severity="ticket"
+          receiver: ticket-webhook
+          repeat_interval: 2h
+
     receivers:
-      - name: webhook
+      - name: page-webhook
         webhook_configs:
-          - url: http://alert-debugger.observability.svc.cluster.local:8080/
+          - url: http://alert-debugger.observability.svc.cluster.local:8080/page
+      - name: ticket-webhook
+        webhook_configs:
+          - url: http://alert-debugger.observability.svc.cluster.local:8080/ticket

@@ -1,0 +1,20 @@
+groups:
+  - name: app.logs
+    rules:
+      - alert: LogsErrorBurst
+        expr: |
+          sum by (app, route) (
+            count_over_time(
+              {namespace="apps"} |= "\" 5"
+              | regexp "\\\"(GET|POST|PUT|DELETE|PATCH) (?P<route>/[^ ]+) HTTP/1\\.1\\\" (?P<status>5\\d\\d)"
+            [5m])
+          ) > 5
+        for: 2m
+        labels:
+          severity: ticket
+          service: available-schedules
+          team: platform
+        annotations:
+          summary: "LogsErrorBurst: explosão de respostas 5xx em 5m (Loki)"
+          description: "Detecta burst de HTTP 5xx via access logs, agregado por app e rota."
+          runbook_url: "runbooks/LogsErrorBurst.md"

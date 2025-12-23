@@ -1,9 +1,25 @@
 loki:
-  auth_enabled: false
-promtail:
-  enabled: true
   config:
-    snippets:
-      pipelineStages:
-        - docker: {}
-        - labeldrop: [container_hash]
+    ruler:
+      storage:
+        type: local
+        local:
+          directory: /tmp/loki/rules
+      rule_path: /var/loki/rules-tmp
+      alertmanager_url: http://kps-kube-prometheus-stack-alertmanager.observability.svc.cluster.local:9093
+      enable_alertmanager_v2: true
+
+  extraVolumes:
+    - name: loki-alert-rules
+      configMap:
+        name: loki-alert-rules
+    - name: loki-rules-tmp
+      emptyDir: {}
+
+  extraVolumeMounts:
+    - name: loki-alert-rules
+      mountPath: /tmp/loki/rules
+      readOnly: true
+    - name: loki-rules-tmp
+      mountPath: /var/loki
+      readOnly: false

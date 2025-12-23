@@ -8,13 +8,90 @@ spec:
     - name: app.availability
       rules:
         - alert: HighErrorRate
-          expr: sum(rate(http_requests_total{job=~"available-schedules-(python|go)",status=~"5.."}[3m])) / sum(rate(http_requests_total{job=~"available-schedules-(python|go)"}[3m])) > 0.005
-          for: 1m
-          labels: { severity: page, service: available-schedules }
+          expr: |
+            (
+              sum(rate(http_requests_total{job=~"available-schedules-(python|go)",status=~"5.."}[5m]))
+              /
+              sum(rate(http_requests_total{job=~"available-schedules-(python|go)"}[5m]))
+            ) > 0.01
+          for: 5m
+          labels:
+            severity: page
+            service: available-schedules
+            team: platform
           annotations:
-            summary: ">0.5% 5xx (1m) — pode ser ruidoso"
+            summary: "Alta taxa de 5xx nas APIs available-schedules (>= 1% por 5m)"
+            description: "Erro 5xx acima de 1% por pelo menos 5 minutos (jobs: available-schedules-python/go). Verificar regressão, dependências e rotas mais afetadas."
+            runbook_url: "runbooks/HighErrorRate.md"
+
         - alert: HighLatencyP95
-          expr: histogram_quantile(0.95, sum by (le)(rate(http_request_duration_seconds_bucket{job=~"available-schedules-(python|go)"}[3m]))) > 0.15
-          for: 1m
-          labels: { severity: page, service: available-schedules }
-          annotations: { summary: "p95 > 150ms (1m) — ruidoso" }
+          expr: |
+            histogram_quantile(
+              0.95,
+              sum by (le, job) (
+                rate(http_request_duration_seconds_bucket{job=~"available-schedules-(python|go)"}[5m])
+              )
+            ) > 0.30
+          for: 10m
+          labels:
+            severity: ticket
+            service: available-schedules
+            team: platform
+          annotations:
+            summary: "Latência p95 alta (>= 300ms por 10m) nas APIs available-schedules"
+            description: "p95 de latência acima de 300ms por 10 minutos. Investigar saturação (CPU/mem), GC, dependências e efeitos de carga."
+            runbook_url: "runbooks/HighLatencyP95.md"
+    - name: app.slo
+      rules:
+        - record: api:request_rate:5m
+          expr: |
+            sum(rate(http_requests_total{job=~"available-schedules-(python|go)", route=~"/v[12]/.*"}[5m]))
+
+        - record: api:error_rate_5xx:5m
+          expr: |
+            sum(rate(http_requests_total{job=~"available-schedules-(python|go)", status=~"5..", route=~"/v[12]/.*"}[5m]))
+            /
+            sum(rate(http_requests_total{job=~"available-schedules-(python|go)", route=~"/v[12]/.*"}[5m]))
+
+        - record: api:burn_rate_5xx:2h
+          expr: |
+            (
+              sum(rate(http_requests_total{job=~"available-schedules-(python|go)", status=~"5..", route=~"/v[12]/.*"}[2h]))
+              /
+              sum(rate(http_requests_total{job=~"available-schedules-(python|go)", route=~"/v[12]/.*"}[2h]))
+            ) / 0.005
+
+        - record: api:burn_rate_5xx:6h
+          expr: |
+            (
+              sum(rate(http_requests_total{job=~"available-schedules-(python|go)", status=~"5..", route=~"/v[12]/.*"}[6h]))
+              /
+              sum(rate(http_requests_total{job=~"available-schedules-(python|go)", route=~"/v[12]/.*"}[6h]))
+            ) / 0.005
+
+        - alert: SLOBurnRateFast
+          expr: api:burn_rate_5xx:2h > 14.4
+          for: 5m
+          labels:
+            severity: page
+            service: available-schedules
+            team: platform
+            slo: api-availability-99_5-30d
+          annotations:
+            summary: "Burn-rate rápido do SLO 99,5% (/api/*) — janela 2h"
+            description: "A taxa de erros 5xx nas rotas /v1 e /v2 está consumindo o error budget rápido demais (burn-rate > 14.4 em 2h). Ação imediata."
+            runbook_url: "runbooks/SLOBurnRate.md"
+
+        - alert: SLOBurnRateSlow
+          expr: api:burn_rate_5xx:6h > 6.0
+          for: 15m
+          labels:
+            severity: ticket
+            service: available-schedules
+            team: platform
+            slo: api-availability-99_5-30d
+          annotations:
+            summary: "Burn-rate lento do SLO 99,5% (/api/*) — janela 6h"
+            description: "A taxa de erros 5xx nas rotas /v1 e /v2 está consumindo error budget acima do esperado (burn-rate > 6.0 em 6h). Investigar e mitigar."
+            runbook_url: "runbooks/SLOBurnRate.md"
+  
