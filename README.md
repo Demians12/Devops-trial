@@ -2,7 +2,7 @@
 
 ## Visão geral
 
-Este repositório evolui a infraestrutura base fornecida no desafio, com foco em **observabilidade**, **confiabilidade** e **qualidade operacional**.  
+Este repositório evolui a infraestrutura base fornecida no desafio da Feegow, com foco em **observabilidade**, **confiabilidade** e **qualidade operacional**.  
 A abordagem adotada foi **incremental e orientada a sinais**, validando cada camada (infra → métricas → logs → alertas) antes de avançar para carga, SLOs e automações.
 
 ### Principais entregas
