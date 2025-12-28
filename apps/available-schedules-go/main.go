@@ -455,6 +455,7 @@ func main() {
 
 	// Friendly alias if the service is accessed directly (without ingress prefix)
 	http.HandleFunc("/appoints/available-schedule", app.instrument("/appoints/available-schedule", app.handleAvailableSchedule))
+	
 
 	addr := ":8080"
 	log.Printf("starting %s listening on %s", serviceName, addr)
