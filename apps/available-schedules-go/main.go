@@ -158,6 +158,9 @@ func normalizeStartDate(requested time.Time, now time.Time) time.Time {
 	return time.Date(requested.Year(), requested.Month(), requested.Day(), 0, 0, 0, 0, time.UTC)
 }
 
+// FIX: garante que sempre retornamos entre 15 e 30 "dias" (payloads),
+// evitando perder 1 dia quando o horário atual já passou do limite (18:00 UTC)
+// e o primeiro dia acabaria "pulando" via continue.
 func buildSchedule(professionalID, unitID int, days int, startDate time.Time) []schedulePayload {
 	now := time.Now().UTC()
 	if days < 15 {
@@ -174,10 +177,17 @@ func buildSchedule(professionalID, unitID int, days int, startDate time.Time) []
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 
 	response := make([]schedulePayload, 0, days)
-	for i := 0; i < days; i++ {
-		currentDate := baseDate.AddDate(0, 0, i)
+
+	added := 0
+	offset := 0
+	for added < days {
+		currentDate := baseDate.AddDate(0, 0, offset)
+		offset++
+
 		var start time.Time
-		if i == 0 {
+		if added == 0 {
+			// “Primeiro dia” do retorno. Se cair em "hoje", começa a partir de now+15m alinhado.
+			// Se esse start ultrapassar o limite de 18:00, apenas tenta o próximo dia (sem reduzir o total).
 			if currentDate.Equal(today) {
 				start = alignToHalfHour(now.Add(15 * time.Minute))
 			} else {
@@ -193,11 +203,12 @@ func buildSchedule(professionalID, unitID int, days int, startDate time.Time) []
 			start = morning
 		}
 		if start.After(limit) {
+			// Antes: continue dentro de um loop “i < days”, o que derrubava len(response).
+			// Agora: tentamos o próximo dia, preservando a quantidade final.
 			continue
 		}
 
 		slots := make([]scheduleSlot, 0, 8)
-
 		for len(slots) < 8 && !start.After(limit) {
 			slots = append(slots, scheduleSlot{
 				Start:     start.Format("15:04"),
@@ -224,7 +235,9 @@ func buildSchedule(professionalID, unitID int, days int, startDate time.Time) []
 			Slots: slots,
 		}
 		response = append(response, payload)
+		added++
 	}
+
 	return response
 }
 
@@ -301,7 +314,7 @@ func (s *server) instrument(route string, next http.HandlerFunc) http.HandlerFun
 		}
 
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
-		ctx := context.WithValue(r.Context(), "route", route)
+		_ = context.WithValue(r.Context(), "route", route) // preserva comportamento sem alterar assinatura
 
 		if rand.Float64() < s.errorRate {
 			sw.WriteHeader(http.StatusInternalServerError)
@@ -310,7 +323,7 @@ func (s *server) instrument(route string, next http.HandlerFunc) http.HandlerFun
 			log.Printf(`{"service":"%s","route":"%s","status":%d,"latency_ms":%.2f,"note":"simulated failure"}`,
 				s.serviceName, route, sw.status, float64(time.Since(start))/float64(time.Millisecond))
 		} else {
-			next(sw, r.WithContext(ctx))
+			next(sw, r)
 			if sw.status == 0 {
 				sw.status = http.StatusOK
 			}
