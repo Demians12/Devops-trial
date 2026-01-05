@@ -37,7 +37,7 @@ func newMetricsStore(buckets []float64) *metricsStore {
 	return &metricsStore{
 		counts:       make(map[string]map[int]float64),
 		buckets:      buckets,
-		bucketCounts: make([]float64, len(buckets)+1), // +Inf bucket
+		bucketCounts: make([]float64, len(buckets)+1),
 	}
 }
 
@@ -214,7 +214,6 @@ func resolveUnit(id int) unitInfo {
 	return units[0]
 }
 
-// garante exatamente "days" dias úteis de retorno mesmo se o "dia 0" estiver após 18:00 UTC
 func buildSchedule(professionalID, unitID int, days int, startDate time.Time) []schedulePayload {
 	now := time.Now().UTC()
 	if days < 15 {
@@ -292,7 +291,6 @@ func (s *server) instrument(route string, next http.Handler) http.Handler {
 
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 
-		// chama handler real
 		if rand.Float64() < s.errorRate {
 			sw.WriteHeader(http.StatusInternalServerError)
 			sw.Header().Set("Content-Type", "application/json")
@@ -304,7 +302,6 @@ func (s *server) instrument(route string, next http.Handler) http.Handler {
 			}
 		}
 
-		// span já existe porque o handler foi envolvido por otelhttp.NewHandler
 		span := trace.SpanFromContext(r.Context())
 		sc := span.SpanContext()
 		traceID := ""
@@ -316,11 +313,9 @@ func (s *server) instrument(route string, next http.Handler) http.Handler {
 
 		latencyMs := float64(time.Since(start)) / float64(time.Millisecond)
 
-		// log JSON simples (promtail pode extrair depois)
 		log.Printf(`{"service":"%s","env":"%s","version":"%s","route":"%s","method":"%s","status":%d,"latency_ms":%.2f,"trace_id":"%s","span_id":"%s"}`,
 			s.serviceName, s.env, s.version, route, r.Method, sw.status, latencyMs, traceID, spanID)
 
-		// métricas
 		s.metrics.observe(route, sw.status, time.Since(start).Seconds())
 	})
 }
@@ -398,7 +393,6 @@ func (s *server) handleAvailableSchedule(w http.ResponseWriter, r *http.Request)
 func initTracer(ctx context.Context, serviceName string) (*sdktrace.TracerProvider, error) {
 	endpoint := strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
 	if endpoint == "" {
-		// fallback seguro pro seu cluster
 		endpoint = "http://otel-collector.observability.svc.cluster.local:4318/v1/traces"
 	}
 
@@ -408,9 +402,9 @@ func initTracer(ctx context.Context, serviceName string) (*sdktrace.TracerProvid
 	}
 
 	exp, err := otlptracehttp.New(ctx,
-		otlptracehttp.WithEndpoint(u.Host),         // host:port
-		otlptracehttp.WithURLPath(u.EscapedPath()), // /v1/traces
-		otlptracehttp.WithInsecure(),               // cluster local
+		otlptracehttp.WithEndpoint(u.Host),
+		otlptracehttp.WithURLPath(u.EscapedPath()),
+		otlptracehttp.WithInsecure(),
 	)
 	if err != nil {
 		return nil, err
@@ -478,7 +472,6 @@ func main() {
 		metrics:     metrics,
 	}
 
-	// handlers básicos
 	http.HandleFunc("/", app.handleRoot)
 	http.HandleFunc("/v2", app.handleRoot)
 	http.HandleFunc("/v2/healthz", app.handleHealth)
@@ -486,18 +479,14 @@ func main() {
 	http.HandleFunc("/v2/metrics", func(w http.ResponseWriter, r *http.Request) { app.metrics.writePrometheus(w) })
 	http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) { app.metrics.writePrometheus(w) })
 
-	// handler da rota principal (primeiro cria handler real)
 	base := http.HandlerFunc(app.handleAvailableSchedule)
 
-	// garante span/context com otelhttp
 	traced := otelhttp.NewHandler(base, "GET /v2/appoints/available-schedule")
 
-	// aplica seu middleware (log + métricas + simulação)
 	instrumented := app.instrument("/v2/appoints/available-schedule", traced)
 
 	http.Handle("/v2/appoints/available-schedule", instrumented)
 
-	// alias opcional
 	http.Handle("/appoints/available-schedule", app.instrument("/appoints/available-schedule", traced))
 
 	addr := ":8080"
