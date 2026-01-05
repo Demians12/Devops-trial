@@ -3,10 +3,11 @@ groups:
     rules:
       - alert: LogsErrorBurst
         expr: |
-          sum by (app, route) (
+          sum by (app, route, trace_id) (
             count_over_time(
-              {namespace="apps"} |= "\" 5"
-              | regexp "\\\"(GET|POST|PUT|DELETE|PATCH) (?P<route>/[^ ]+) HTTP/1\\.1\\\" (?P<status>5\\d\\d)"
+              {namespace="apps"} 
+              | json
+              | status =~ "5.."
             [5m])
           ) > 5
         for: 2m

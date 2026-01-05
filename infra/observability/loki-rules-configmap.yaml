@@ -10,10 +10,10 @@ data:
         rules:
           - alert: LogsErrorBurst
             expr: |
-              sum by (app, route) (
+              sum by (app, route, trace_id) (
                 count_over_time(
                   {namespace="apps"} |= "\" 5"
-                  | regexp "\\\"(GET|POST|PUT|DELETE|PATCH) (?P<route>/[^ ]+) HTTP/1\\.1\\\" (?P<status>5\\d\\d)"
+                  | regexp "\\\"(GET|POST|PUT|DELETE|PATCH) (?P<route>/[^ ]+) HTTP/1\\.1\\\" (?P<status>5\\d\\d) .* trace_id=(?P<trace_id>[a-f0-9]+)"
                 [5m])
               ) > 5
             for: 2m
@@ -23,4 +23,5 @@ data:
               team: platform
             annotations:
               summary: "LogsErrorBurst: explosão de respostas 5xx em 5m (Loki)"
+              description: "Detectado burst de HTTP 5xx na rota {{ $labels.route }}. Exemplo: {{ $labels.trace_id }}"
               runbook_url: "runbooks/LogsErrorBurst.md"

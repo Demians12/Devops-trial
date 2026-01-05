@@ -14,11 +14,25 @@ data:
         url: http://loki.observability.svc.cluster.local:3100
         access: proxy
         isDefault: false
+        jsonData:
+          derivedFields:
+            - datasourceUid: "tempo" # UID do Tempo no Grafana
+              matcherRegex: "trace_id=(\\w+)" 
+              name: "TraceID"
+              url: "$${__value.raw}"
+    apiVersion: 1
+    datasources:
+      - name: Tempo
+        type: tempo
+        url: http://tempo.observability.svc.cluster.local:3100
+        access: proxy
+        isDefault: false
   tempo.yaml: |
     apiVersion: 1
     datasources:
       - name: Tempo
         type: tempo
+        uid: "tempo"
         url: http://tempo.observability.svc.cluster.local:3100
         access: proxy
         isDefault: false
