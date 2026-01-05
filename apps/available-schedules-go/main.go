@@ -7,11 +7,21 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type metricsStore struct {
@@ -76,14 +86,8 @@ func (m *metricsStore) writePrometheus(w http.ResponseWriter) {
 	cumulative := 0.0
 	for i, boundary := range m.buckets {
 		cumulative += m.bucketCounts[i]
-		fmt.Fprintf(
-			w,
-			`http_request_duration_seconds_bucket{le="%g"} %.0f`+"\n",
-			boundary,
-			cumulative,
-		)
+		fmt.Fprintf(w, `http_request_duration_seconds_bucket{le="%g"} %.0f`+"\n", boundary, cumulative)
 	}
-	// +Inf bucket
 	cumulative += m.bucketCounts[len(m.bucketCounts)-1]
 	fmt.Fprintf(w, `http_request_duration_seconds_bucket{le="+Inf"} %.0f`+"\n", cumulative)
 	fmt.Fprintf(w, "http_request_duration_seconds_sum %.6f\n", m.sum)
@@ -106,10 +110,7 @@ func parseFloatEnv(key string, fallback float64) float64 {
 		return fallback
 	}
 	parsed, err := strconv.ParseFloat(val, 64)
-	if err != nil {
-		return fallback
-	}
-	if parsed < 0 {
+	if err != nil || parsed < 0 {
 		return fallback
 	}
 	return parsed
@@ -121,10 +122,7 @@ func parseIntEnv(key string, fallback int) int {
 		return fallback
 	}
 	parsed, err := strconv.Atoi(val)
-	if err != nil {
-		return fallback
-	}
-	if parsed < 0 {
+	if err != nil || parsed < 0 {
 		return fallback
 	}
 	return parsed
@@ -156,96 +154,6 @@ func normalizeStartDate(requested time.Time, now time.Time) time.Time {
 		return today
 	}
 	return time.Date(requested.Year(), requested.Month(), requested.Day(), 0, 0, 0, 0, time.UTC)
-}
-
-// FIX: garante que sempre retornamos entre 15 e 30 "dias" (payloads),
-// evitando perder 1 dia quando o horário atual já passou do limite (18:00 UTC)
-// e o primeiro dia acabaria "pulando" via continue.
-func buildSchedule(professionalID, unitID int, days int, startDate time.Time) []schedulePayload {
-	now := time.Now().UTC()
-	if days < 15 {
-		days = 15
-	}
-	if days > 30 {
-		days = 30
-	}
-
-	prof := resolveProfessional(professionalID)
-	unit := resolveUnit(unitID)
-
-	baseDate := normalizeStartDate(startDate, now)
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
-
-	response := make([]schedulePayload, 0, days)
-
-	added := 0
-	offset := 0
-	for added < days {
-		currentDate := baseDate.AddDate(0, 0, offset)
-		offset++
-
-		var start time.Time
-		if added == 0 {
-			// “Primeiro dia” do retorno. Se cair em "hoje", começa a partir de now+15m alinhado.
-			// Se esse start ultrapassar o limite de 18:00, apenas tenta o próximo dia (sem reduzir o total).
-			if currentDate.Equal(today) {
-				start = alignToHalfHour(now.Add(15 * time.Minute))
-			} else {
-				start = time.Date(currentDate.Year(), currentDate.Month(), currentDate.Day(), 8, 0, 0, 0, time.UTC)
-			}
-		} else {
-			start = time.Date(currentDate.Year(), currentDate.Month(), currentDate.Day(), 8, 0, 0, 0, time.UTC)
-		}
-
-		limit := time.Date(currentDate.Year(), currentDate.Month(), currentDate.Day(), 18, 0, 0, 0, time.UTC)
-		morning := time.Date(currentDate.Year(), currentDate.Month(), currentDate.Day(), 8, 0, 0, 0, time.UTC)
-		if start.Before(morning) {
-			start = morning
-		}
-		if start.After(limit) {
-			// Antes: continue dentro de um loop “i < days”, o que derrubava len(response).
-			// Agora: tentamos o próximo dia, preservando a quantidade final.
-			continue
-		}
-
-		slots := make([]scheduleSlot, 0, 8)
-		for len(slots) < 8 && !start.After(limit) {
-			slots = append(slots, scheduleSlot{
-				Start:     start.Format("15:04"),
-				Available: rand.Intn(10) > 1,
-			})
-			start = start.Add(30 * time.Minute)
-		}
-
-		payload := schedulePayload{
-			Professional: map[string]interface{}{
-				"id":   prof.ID,
-				"name": prof.Name,
-			},
-			Unit: map[string]interface{}{
-				"id":   unit.ID,
-				"name": unit.Name,
-			},
-			Room: unit.Room,
-			Specialty: map[string]interface{}{
-				"id":   prof.Specialty.ID,
-				"name": prof.Specialty.Name,
-			},
-			Date:  currentDate.Format("2006-01-02"),
-			Slots: slots,
-		}
-		response = append(response, payload)
-		added++
-	}
-
-	return response
-}
-
-type server struct {
-	serviceName string
-	errorRate   float64
-	extraDelay  time.Duration
-	metrics     *metricsStore
 }
 
 type specialty struct {
@@ -306,38 +214,115 @@ func resolveUnit(id int) unitInfo {
 	return units[0]
 }
 
-func (s *server) instrument(route string, next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+// garante exatamente "days" dias úteis de retorno mesmo se o "dia 0" estiver após 18:00 UTC
+func buildSchedule(professionalID, unitID int, days int, startDate time.Time) []schedulePayload {
+	now := time.Now().UTC()
+	if days < 15 {
+		days = 15
+	}
+	if days > 30 {
+		days = 30
+	}
+
+	prof := resolveProfessional(professionalID)
+	unit := resolveUnit(unitID)
+
+	baseDate := normalizeStartDate(startDate, now)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+
+	response := make([]schedulePayload, 0, days)
+	added := 0
+	offset := 0
+
+	for added < days {
+		currentDate := baseDate.AddDate(0, 0, offset)
+		offset++
+
+		var start time.Time
+		if currentDate.Equal(today) {
+			start = alignToHalfHour(now.Add(15 * time.Minute))
+		} else {
+			start = time.Date(currentDate.Year(), currentDate.Month(), currentDate.Day(), 8, 0, 0, 0, time.UTC)
+		}
+
+		limit := time.Date(currentDate.Year(), currentDate.Month(), currentDate.Day(), 18, 0, 0, 0, time.UTC)
+		if start.After(limit) {
+			continue
+		}
+
+		slots := make([]scheduleSlot, 0, 8)
+		for len(slots) < 8 && !start.After(limit) {
+			slots = append(slots, scheduleSlot{
+				Start:     start.Format("15:04"),
+				Available: rand.Intn(10) > 1,
+			})
+			start = start.Add(30 * time.Minute)
+		}
+
+		response = append(response, schedulePayload{
+			Professional: map[string]interface{}{"id": prof.ID, "name": prof.Name},
+			Unit:         map[string]interface{}{"id": unit.ID, "name": unit.Name},
+			Room:         unit.Room,
+			Specialty:    map[string]interface{}{"id": prof.Specialty.ID, "name": prof.Specialty.Name},
+			Date:         currentDate.Format("2006-01-02"),
+			Slots:        slots,
+		})
+		added++
+	}
+
+	return response
+}
+
+type server struct {
+	serviceName string
+	env         string
+	version     string
+	errorRate   float64
+	extraDelay  time.Duration
+	metrics     *metricsStore
+}
+
+func (s *server) instrument(route string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+
 		if s.extraDelay > 0 {
 			time.Sleep(s.extraDelay)
 		}
 
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
-		_ = context.WithValue(r.Context(), "route", route) // preserva comportamento sem alterar assinatura
 
+		// chama handler real
 		if rand.Float64() < s.errorRate {
 			sw.WriteHeader(http.StatusInternalServerError)
 			sw.Header().Set("Content-Type", "application/json")
 			_, _ = sw.Write([]byte(`{"error":"transient error retrieving schedule"}`))
-			log.Printf(`{"service":"%s","route":"%s","status":%d,"latency_ms":%.2f,"note":"simulated failure"}`,
-				s.serviceName, route, sw.status, float64(time.Since(start))/float64(time.Millisecond))
 		} else {
-			next(sw, r)
+			next.ServeHTTP(sw, r)
 			if sw.status == 0 {
 				sw.status = http.StatusOK
 			}
-			log.Printf(`{"service":"%s","route":"%s","status":%d,"latency_ms":%.2f}`,
-				s.serviceName, route, sw.status, float64(time.Since(start))/float64(time.Millisecond))
 		}
 
-		duration := time.Since(start).Seconds()
-		statusCode := sw.status
-		if statusCode == 0 {
-			statusCode = http.StatusOK
+		// span já existe porque o handler foi envolvido por otelhttp.NewHandler
+		span := trace.SpanFromContext(r.Context())
+		sc := span.SpanContext()
+		traceID := ""
+		spanID := ""
+		if sc.IsValid() {
+			traceID = sc.TraceID().String()
+			spanID = sc.SpanID().String()
 		}
-		s.metrics.observe(route, statusCode, duration)
-	}
+
+		latencyMs := float64(time.Since(start)) / float64(time.Millisecond)
+
+		// log JSON simples (promtail pode extrair depois)
+		log.Printf(`{"service":"%s","env":"%s","version":"%s","route":"%s","method":"%s","status":%d,"latency_ms":%.2f,"trace_id":"%s","span_id":"%s"}`,
+			s.serviceName, s.env, s.version, route, r.Method, sw.status, latencyMs, traceID, spanID)
+
+		// métricas
+		s.metrics.observe(route, sw.status, time.Since(start).Seconds())
+	})
 }
 
 func (s *server) handleRoot(w http.ResponseWriter, _ *http.Request) {
@@ -361,6 +346,7 @@ func (s *server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 
 func (s *server) handleAvailableSchedule(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
+
 	professionalID, _ := strconv.Atoi(query.Get("professional_id"))
 	if professionalID == 0 {
 		professionalID = 4102
@@ -369,6 +355,7 @@ func (s *server) handleAvailableSchedule(w http.ResponseWriter, r *http.Request)
 	if unitID == 0 {
 		unitID = 108
 	}
+
 	daysRequested, err := strconv.Atoi(query.Get("days"))
 	if err != nil || daysRequested <= 0 {
 		daysRequested = 15
@@ -390,72 +377,128 @@ func (s *server) handleAvailableSchedule(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	response := availableScheduleResponse{
+	resp := availableScheduleResponse{
 		Success: true,
 		Filters: map[string]interface{}{
-			"generated_at":    time.Now().UTC().Format(time.RFC3339),
-			"professional_id": professionalID,
-			"unit_id":         unitID,
-			"days_requested":  daysRequested,
-			"days_returned":   days,
-			"start_date_requested": func() interface{} {
-				if startDateRequested == "" {
-					return nil
-				}
-				return startDateRequested
-			}(),
-			"start_date_applied": startDate.Format("2006-01-02"),
+			"generated_at":         time.Now().UTC().Format(time.RFC3339),
+			"professional_id":      professionalID,
+			"unit_id":              unitID,
+			"days_requested":       daysRequested,
+			"days_returned":        days,
+			"start_date_requested": startDateRequested,
+			"start_date_applied":   startDate.Format("2006-01-02"),
 		},
 		Data: buildSchedule(professionalID, unitID, days, startDate),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func initTracer(ctx context.Context, serviceName string) (*sdktrace.TracerProvider, error) {
+	endpoint := strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
+	if endpoint == "" {
+		// fallback seguro pro seu cluster
+		endpoint = "http://otel-collector.observability.svc.cluster.local:4318/v1/traces"
+	}
+
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("invalid OTEL_EXPORTER_OTLP_ENDPOINT: %w", err)
+	}
+
+	exp, err := otlptracehttp.New(ctx,
+		otlptracehttp.WithEndpoint(u.Host),         // host:port
+		otlptracehttp.WithURLPath(u.EscapedPath()), // /v1/traces
+		otlptracehttp.WithInsecure(),               // cluster local
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := resource.New(ctx,
+		resource.WithAttributes(
+			semconv.ServiceNameKey.String(serviceName),
+		),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exp),
+		sdktrace.WithResource(res),
+	)
+
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	))
+
+	return tp, nil
 }
 
 func main() {
-	rand.Seed(time.Now().UnixNano())
+	rand.NewSource(time.Now().UnixNano())
+	ctx := context.Background()
 
 	serviceName := strings.TrimSpace(os.Getenv("SERVICE_NAME"))
 	if serviceName == "" {
 		serviceName = "available-schedules"
 	}
+	env := strings.TrimSpace(os.Getenv("ENV"))
+	if env == "" {
+		env = "dev"
+	}
+	version := strings.TrimSpace(os.Getenv("VERSION"))
+	if version == "" {
+		version = "unknown"
+	}
+
+	tp, err := initTracer(ctx, serviceName)
+	if err != nil {
+		log.Fatalf("init tracer: %v", err)
+	}
+	defer func() { _ = tp.Shutdown(ctx) }()
 
 	errorRate := parseFloatEnv("ERROR_RATE", 0.01)
 	if errorRate > 1 {
 		errorRate = 1
 	}
-
 	extraLatency := time.Duration(parseIntEnv("EXTRA_LATENCY_MS", 0)) * time.Millisecond
 
 	metrics := newMetricsStore([]float64{0.05, 0.1, 0.2, 0.3, 0.5, 0.75, 1, 2, 5})
 	app := &server{
 		serviceName: serviceName,
+		env:         env,
+		version:     version,
 		errorRate:   errorRate,
 		extraDelay:  extraLatency,
 		metrics:     metrics,
 	}
 
-	// Root handlers
+	// handlers básicos
 	http.HandleFunc("/", app.handleRoot)
 	http.HandleFunc("/v2", app.handleRoot)
 	http.HandleFunc("/v2/healthz", app.handleHealth)
 	http.HandleFunc("/healthz", app.handleHealth)
+	http.HandleFunc("/v2/metrics", func(w http.ResponseWriter, r *http.Request) { app.metrics.writePrometheus(w) })
+	http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) { app.metrics.writePrometheus(w) })
 
-	// Metrics endpoint shared between prefixes
-	http.HandleFunc("/v2/metrics", func(w http.ResponseWriter, r *http.Request) {
-		app.metrics.writePrometheus(w)
-	})
-	http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
-		app.metrics.writePrometheus(w)
-	})
+	// handler da rota principal (primeiro cria handler real)
+	base := http.HandlerFunc(app.handleAvailableSchedule)
 
-	// Schedule handlers
-	http.HandleFunc("/v2/appoints/available-schedule", app.instrument("/v2/appoints/available-schedule", app.handleAvailableSchedule))
+	// garante span/context com otelhttp
+	traced := otelhttp.NewHandler(base, "GET /v2/appoints/available-schedule")
 
-	// Friendly alias if the service is accessed directly (without ingress prefix)
-	http.HandleFunc("/appoints/available-schedule", app.instrument("/appoints/available-schedule", app.handleAvailableSchedule))
-	
+	// aplica seu middleware (log + métricas + simulação)
+	instrumented := app.instrument("/v2/appoints/available-schedule", traced)
+
+	http.Handle("/v2/appoints/available-schedule", instrumented)
+
+	// alias opcional
+	http.Handle("/appoints/available-schedule", app.instrument("/appoints/available-schedule", traced))
 
 	addr := ":8080"
 	log.Printf("starting %s listening on %s", serviceName, addr)

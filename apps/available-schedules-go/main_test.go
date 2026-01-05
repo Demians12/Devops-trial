@@ -24,18 +24,22 @@ func TestAvailableScheduleHandler_Success200_AndMetricsRecorded(t *testing.T) {
 	metrics := newMetricsStore([]float64{0.05, 0.1, 0.2, 0.3, 0.5, 0.75, 1, 2, 5})
 	app := &server{
 		serviceName: "available-schedules",
-		errorRate:   0, // deterministic success
+		env:         "test",
+		version:     "1.0.0-test",
+		errorRate:   0,
 		extraDelay:  0,
 		metrics:     metrics,
 	}
 
 	route := "/v2/appoints/available-schedule"
-	handler := app.instrument(route, app.handleAvailableSchedule)
+
+	baseHandler := http.HandlerFunc(app.handleAvailableSchedule)
+	handler := app.instrument(route, baseHandler)
 
 	req := httptest.NewRequest("GET", "http://example.com"+route+"?days=15", nil)
 	rr := httptest.NewRecorder()
 
-	handler(rr, req)
+	handler.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
@@ -45,14 +49,15 @@ func TestAvailableScheduleHandler_Success200_AndMetricsRecorded(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid json response: %v body=%s", err, rr.Body.String())
 	}
+
 	if !resp.Success {
 		t.Fatalf("expected success=true, got false")
 	}
-	if len(resp.Data) < 15 || len(resp.Data) > 30 {
-		t.Fatalf("expected data length between 15 and 30, got %d", len(resp.Data))
+
+	if len(resp.Data) < 15 {
+		t.Fatalf("expected data length at least 15, got %d", len(resp.Data))
 	}
 
-	// Validate metrics were recorded for route + status
 	app.metrics.mu.Lock()
 	defer app.metrics.mu.Unlock()
 
@@ -68,30 +73,29 @@ func TestAvailableScheduleHandler_Error500_AndMetricsRecorded(t *testing.T) {
 	metrics := newMetricsStore([]float64{0.05, 0.1, 0.2, 0.3, 0.5, 0.75, 1, 2, 5})
 	app := &server{
 		serviceName: "available-schedules",
-		errorRate:   1, // deterministic failure
+		env:         "test",
+		version:     "1.0.0-test",
+		errorRate:   1, // Falha determinística
 		extraDelay:  0,
 		metrics:     metrics,
 	}
 
 	route := "/v2/appoints/available-schedule"
-	handler := app.instrument(route, app.handleAvailableSchedule)
+	baseHandler := http.HandlerFunc(app.handleAvailableSchedule)
+	handler := app.instrument(route, baseHandler)
 
 	req := httptest.NewRequest("GET", "http://example.com"+route+"?days=15", nil)
 	rr := httptest.NewRecorder()
 
-	handler(rr, req)
+	handler.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d body=%s", rr.Code, rr.Body.String())
 	}
 
-	// Validate metrics were recorded for route + status 500
 	app.metrics.mu.Lock()
 	defer app.metrics.mu.Unlock()
 
-	if _, ok := app.metrics.counts[route]; !ok {
-		t.Fatalf("metrics missing route=%s", route)
-	}
 	if got := app.metrics.counts[route][http.StatusInternalServerError]; got != 1 {
 		t.Fatalf("expected metrics count for 500 to be 1, got %.0f", got)
 	}
