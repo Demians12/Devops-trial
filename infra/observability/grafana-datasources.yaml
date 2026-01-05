@@ -16,10 +16,10 @@ data:
         isDefault: false
         jsonData:
           derivedFields:
-            - datasourceUid: "tempo" # UID do Tempo no Grafana
-              matcherRegex: "trace_id=(\\w+)" 
-              name: "TraceID"
-              url: "$${__value.raw}"
+            - datasourceUid: tempo 
+              matcherRegex: '"trace_id": "(\w+)"'
+              name: TraceID
+              url: $${__value.raw}
     apiVersion: 1
     datasources:
       - name: Tempo

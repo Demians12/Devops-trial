@@ -22,9 +22,16 @@ spec:
               value: "40"
             - name: SERVICE_NAME
               value: "available-schedules"
+            # New Variables for OTEL
+            - name: ENV
+              value: "production"
+            - name: VERSION
+              value: "v1.0.1"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              # Pointing to the OTEL Collector service
+              value: "http://otel-collector.observability.svc.cluster.local:4318/v1/traces"
           ports:
             - containerPort: 8080
           resources:
-            requests: { cpu: "40m", memory: "48Mi" }
+            requests: { cpu: "40m", memory: "64Mi" } 
             limits:   { cpu: "200m", memory: "192Mi" }
-
