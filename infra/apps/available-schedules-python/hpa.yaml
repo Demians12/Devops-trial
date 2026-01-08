@@ -2,6 +2,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: available-schedules-python
+  namespace: apps
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

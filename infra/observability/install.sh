@@ -70,6 +70,7 @@ LOKI_TIMEOUT=${HELM_TIMEOUT_LOKI:-8m}
 TEMPO_TIMEOUT=${HELM_TIMEOUT_TEMPO:-8m}
 
 ensure_namespace observability
+ensure_namespace apps
 ensure_namespace ingress
 
 helm_install "Instalando ingress-nginx" \
