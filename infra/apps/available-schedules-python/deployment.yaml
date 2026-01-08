@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: available-schedules-python
+  namespace: apps
   labels: { app: available-schedules-python }
 spec:
   replicas: 1
@@ -14,7 +15,7 @@ spec:
       containers:
         - name: available-schedules-python
           image: available-schedules-python:local
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           env:
             - name: ERROR_RATE
               value: "0.02"  # ligeiramente alto

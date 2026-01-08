@@ -2,6 +2,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: available-schedules-go
+  namespace: apps
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -17,4 +18,3 @@ spec:
         target:
           type: Utilization
           averageUtilization: 35
-

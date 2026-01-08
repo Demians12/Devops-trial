@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: available-schedules-web
+  namespace: apps
   labels: { app: available-schedules-web }
 spec:
   replicas: 1
@@ -14,7 +15,7 @@ spec:
       containers:
         - name: available-schedules-web
           image: available-schedules-web:local
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           env:
             - name: PORT
               value: "3000"
@@ -35,4 +36,3 @@ spec:
           resources:
             requests: { cpu: "30m", memory: "64Mi" }
             limits:   { cpu: "150m", memory: "192Mi" }
-

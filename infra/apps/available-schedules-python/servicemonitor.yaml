@@ -2,6 +2,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: available-schedules-python
+  namespace: apps
   labels:
     release: kps   # deve casar com o release do kube-prometheus-stack
 spec:
