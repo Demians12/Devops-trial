@@ -30,7 +30,7 @@ spec:
               value: "v1.0.1"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               # Pointing to the OTEL Collector service
-              value: "http://otel-collector.observability.svc.cluster.local:4318/v1/traces" # OTLP HTTP endpoint
+              value: "tempo.observability.svc.cluster.local:4318" # OTLP HTTP endpoint
           ports:
             - containerPort: 8080
           resources:

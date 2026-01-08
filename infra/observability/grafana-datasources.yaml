@@ -6,26 +6,25 @@ metadata:
   labels:
     grafana_datasource: "1"
 data:
-  loki.yaml: |
+  datasources.yaml: |
     apiVersion: 1
     datasources:
       - name: Loki
         type: loki
+        uid: loki
         url: http://loki.observability.svc.cluster.local:3100
-        access: proxy
-        isDefault: false
         jsonData:
           derivedFields:
-            - datasourceUid: tempo
-              matcherRegex: '"trace_id": "(\w+)"'
+            - datasourceUid: "tempo"
+              # Regex melhorada para pegar IDs hexadecimais de 32 caracteres (padrão OTEL)
+              matcherRegex: '"trace_id":"([a-f0-9]+)"'
               name: TraceID
-              url: ${__value.raw}
-  tempo.yaml: |
-    apiVersion: 1
-    datasources:
+              url: '$${__value.raw}'
       - name: Tempo
         type: tempo
         uid: "tempo"
         url: http://tempo.observability.svc.cluster.local:3100
-        access: proxy
-        isDefault: false
+      - name: Prometheus
+        type: prometheus
+        uid: prometheus
+        url: http://prometheus-kps-prometheus.observability.svc.cluster.local:9090
