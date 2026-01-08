@@ -234,8 +234,6 @@ func initTracer(ctx context.Context, serviceName string) (*sdktrace.TracerProvid
 			propagation.Baggage{},
 		),
 	)
-
-	log.Println("DEBUG: Tracer configurado com sucesso e registrado globalmente")
 	return tp, nil
 }
 func main() {
