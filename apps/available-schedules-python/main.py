@@ -1,3 +1,5 @@
+import json
+import logging
 import os
 import random
 import time
@@ -16,6 +18,8 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 ERROR_RATE = float(os.getenv("ERROR_RATE", "0.01"))
 EXTRA_LATENCY_MS = int(os.getenv("EXTRA_LATENCY_MS", "0"))
 SERVICE_NAME = os.getenv("SERVICE_NAME", "available-schedules")
+ENV = os.getenv("ENV", "dev")
+VERSION = os.getenv("VERSION", "unknown")
 
 OTEL_ENDPOINT = os.getenv(
     "OTEL_EXPORTER_OTLP_ENDPOINT",
@@ -31,6 +35,9 @@ tracer = trace.get_tracer(__name__)
 
 app = FastAPI(title="available-schedules-python")
 FastAPIInstrumentor.instrument_app(app)
+
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger("available-schedules")
 
 REQS = Counter("http_requests_total", "Total HTTP requests", ["route", "status"])
 LAT = Histogram(
@@ -168,26 +175,49 @@ def observe_route(route: str):
     def decorator(handler):
         @wraps(handler)
         def wrapper(*args, **kwargs):
-            with LAT.time():
-                if EXTRA_LATENCY_MS > 0:
-                    time.sleep(EXTRA_LATENCY_MS / 1000)
-                status = 200
-                with tracer.start_as_current_span(route) as span:
-                    if random.random() < ERROR_RATE:
-                        status = 500
-                        span.set_attribute("error.type", "simulated_failure")
-                        result = Response(
-                            content="transient error retrieving schedule",
-                            status_code=status,
-                        )
+            start = time.perf_counter()
+            if EXTRA_LATENCY_MS > 0:
+                time.sleep(EXTRA_LATENCY_MS / 1000)
+            status = 200
+            with tracer.start_as_current_span(route) as span:
+                if random.random() < ERROR_RATE:
+                    status = 500
+                    span.set_attribute("error.type", "simulated_failure")
+                    result = Response(
+                        content="transient error retrieving schedule",
+                        status_code=status,
+                    )
+                else:
+                    result = handler(*args, **kwargs)
+                    if isinstance(result, Response):
+                        status = result.status_code
                     else:
-                        result = handler(*args, **kwargs)
-                        if isinstance(result, Response):
-                            status = result.status_code
-                        else:
-                            status = 200
-                REQS.labels(route=route, status=str(status)).inc()
-                return result
+                        status = 200
+                span_context = span.get_span_context()
+                trace_id = ""
+                span_id = ""
+                if span_context.is_valid:
+                    trace_id = f"{span_context.trace_id:032x}"
+                    span_id = f"{span_context.span_id:016x}"
+            latency_ms = (time.perf_counter() - start) * 1000
+            LAT.observe(latency_ms / 1000)
+            REQS.labels(route=route, status=str(status)).inc()
+            logger.info(
+                json.dumps(
+                    {
+                        "service": SERVICE_NAME,
+                        "env": ENV,
+                        "version": VERSION,
+                        "route": route,
+                        "method": "GET",
+                        "status": status,
+                        "latency_ms": round(latency_ms, 2),
+                        "trace_id": trace_id,
+                        "span_id": span_id,
+                    }
+                )
+            )
+            return result
 
         return wrapper
 
