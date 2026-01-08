@@ -16,17 +16,10 @@ data:
         isDefault: false
         jsonData:
           derivedFields:
-            - datasourceUid: tempo 
+            - datasourceUid: tempo
               matcherRegex: '"trace_id": "(\w+)"'
               name: TraceID
-              url: $${__value.raw}
-    apiVersion: 1
-    datasources:
-      - name: Tempo
-        type: tempo
-        url: http://tempo.observability.svc.cluster.local:3100
-        access: proxy
-        isDefault: false
+              url: ${__value.raw}
   tempo.yaml: |
     apiVersion: 1
     datasources:
