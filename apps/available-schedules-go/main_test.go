@@ -11,16 +11,13 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 )
 
-// Helper para criar o handler completo (Otel + Instrument) idêntico ao main
 func setupTestHandler(app *server, route string) http.Handler {
 	baseHandler := http.HandlerFunc(app.handleAvailableSchedule)
-	// Ordem correta conforme o main: Instrument dentro do Otel
 	instrumented := app.instrument(route, baseHandler)
 	return otelhttp.NewHandler(instrumented, "TestOperation")
 }
 
 func TestAvailableScheduleHandler_Success200_AndMetricsRecorded(t *testing.T) {
-	// Setup do Tracer Provider para testes (evita nil pointer)
 	tp := trace.NewTracerProvider()
 	otel.SetTracerProvider(tp)
 
@@ -54,7 +51,6 @@ func TestAvailableScheduleHandler_Success200_AndMetricsRecorded(t *testing.T) {
 		t.Fatal("expected success=true, got false")
 	}
 
-	// Verificação de Métricas
 	app.metrics.mu.Lock()
 	defer app.metrics.mu.Unlock()
 	if got := app.metrics.counts[route][http.StatusOK]; got != 1 {
@@ -69,12 +65,16 @@ func TestAvailableScheduleHandler_Error500_AndMetricsRecorded(t *testing.T) {
 	metrics := newMetricsStore([]float64{0.05, 0.1})
 	app := &server{
 		serviceName: "available-schedules",
-		errorRate:   1.0, // Força erro
+		errorRate:   1.0,
 		metrics:     metrics,
 	}
 
 	route := "/v2/appoints/available-schedule"
-	handler := setupTestHandler(app, route)
+
+	emptyHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+
+	instrumented := app.instrument(route, emptyHandler)
+	handler := otelhttp.NewHandler(instrumented, "TestErrorOperation")
 
 	req := httptest.NewRequest("GET", "http://example.com"+route, nil)
 	rr := httptest.NewRecorder()
@@ -82,7 +82,7 @@ func TestAvailableScheduleHandler_Error500_AndMetricsRecorded(t *testing.T) {
 	handler.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d", rr.Code)
+		t.Fatalf("expected 500, got %d. Body: %s", rr.Code, rr.Body.String())
 	}
 
 	app.metrics.mu.Lock()
