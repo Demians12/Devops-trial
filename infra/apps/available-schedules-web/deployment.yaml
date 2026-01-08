@@ -15,7 +15,7 @@ spec:
       containers:
         - name: available-schedules-web
           image: available-schedules-web:local
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           env:
             - name: PORT
               value: "3000"

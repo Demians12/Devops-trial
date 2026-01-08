@@ -15,7 +15,7 @@ spec:
       containers:
         - name: available-schedules-go
           image: available-schedules-go:local
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           env:
             - name: ERROR_RATE
               value: "0.02"
